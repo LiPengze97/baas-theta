@@ -32,7 +32,8 @@ type Ledger interface {
 	GetDynasty() *big.Int
 	ScreenTxUnsafe(rawTx common.Bytes) result.Result
 	ScreenTx(rawTx common.Bytes) (priority *TxInfo, res result.Result)
-	ProposeBlockTxs(block *Block, shouldIncludeValidatorUpdateTxs bool) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result)
+	// ProposeBlockTxs(block *Block, shouldIncludeValidatorUpdateTxs bool) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result)
+	ProposeBlockTxs(block *Block) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result)
 	ApplyBlockTxs(block *Block) result.Result
 	ApplyBlockTxsForChainCorrection(block *Block) (common.Hash, result.Result)
 	//ResetState(height uint64, rootHash common.Hash) result.Result

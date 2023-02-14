@@ -61,9 +61,8 @@ type ValidatorSet struct {
 }
 
 // NewValidatorSet returns a new instance of ValidatorSet.
-func NewValidatorSet(dynasty *big.Int) *ValidatorSet {
+func NewValidatorSet() *ValidatorSet {
 	return &ValidatorSet{
-		dynasty:    dynasty,
 		validators: []Validator{},
 	}
 }
@@ -80,7 +79,7 @@ func (s *ValidatorSet) Dynasty() *big.Int {
 
 // Copy creates a copy of this validator set.
 func (s *ValidatorSet) Copy() *ValidatorSet {
-	ret := NewValidatorSet(s.dynasty)
+	ret := NewValidatorSet()
 	for _, v := range s.Validators() {
 		ret.AddValidator(v)
 	}

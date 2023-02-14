@@ -9,7 +9,6 @@ import (
 	"github.com/thetatoken/theta/store/database"
 	sbc "github.com/thetatoken/thetasubchain/blockchain"
 	score "github.com/thetatoken/thetasubchain/core"
-	"github.com/thetatoken/thetasubchain/interchain/witness"
 	slst "github.com/thetatoken/thetasubchain/ledger/state"
 	stypes "github.com/thetatoken/thetasubchain/ledger/types"
 )
@@ -46,7 +45,7 @@ type Executor struct {
 
 // NewExecutor creates a new instance of Executor
 func NewExecutor(db database.Database, chain *sbc.Chain, state *slst.LedgerState, consensus score.ConsensusEngine,
-	valMgr score.ValidatorManager, ledger score.Ledger, metachainWitness witness.ChainWitness) *Executor {
+	valMgr score.ValidatorManager, ledger score.Ledger) *Executor {
 	executor := &Executor{
 		db:                               db,
 		chain:                            chain,
@@ -54,7 +53,7 @@ func NewExecutor(db database.Database, chain *sbc.Chain, state *slst.LedgerState
 		consensus:                        consensus,
 		valMgr:                           valMgr,
 		coinbaseTxExec:                   NewCoinbaseTxExecutor(db, chain, state, consensus, valMgr),
-		subchainValidatorSetUpdateTxExec: NewSubchainValidatorSetUpdateTxExecutor(db, chain, state, consensus, valMgr, metachainWitness),
+		subchainValidatorSetUpdateTxExec: NewSubchainValidatorSetUpdateTxExecutor(db, chain, state, consensus, valMgr),
 		sendTxExec:                       NewSendTxExecutor(state),
 		smartContractTxExec:              NewSmartContractTxExecutor(chain, state, ledger, valMgr),
 		skipSanityCheck:                  false,

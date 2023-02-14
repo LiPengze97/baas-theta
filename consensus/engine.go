@@ -23,9 +23,7 @@ import (
 	"github.com/thetatoken/theta/store"
 
 	sbc "github.com/thetatoken/thetasubchain/blockchain"
-	scom "github.com/thetatoken/thetasubchain/common"
 	score "github.com/thetatoken/thetasubchain/core"
-	"github.com/thetatoken/thetasubchain/interchain/witness"
 )
 
 var logger = log.WithFields(log.Fields{"prefix": "consensus"})
@@ -42,7 +40,7 @@ type ConsensusEngine struct {
 	dispatcher       *dispatcher.Dispatcher
 	validatorManager score.ValidatorManager
 	ledger           score.Ledger
-	metachainWitness witness.ChainWitness
+	// metachainWitness witness.ChainWitness
 
 	incoming        chan interface{}
 	finalizedBlocks chan *score.Block
@@ -66,7 +64,7 @@ type ConsensusEngine struct {
 
 // NewConsensusEngine creates a instance of ConsensusEngine.
 func NewConsensusEngine(privateKey *crypto.PrivateKey, db store.Store, chain *sbc.Chain, dispatcher *dispatcher.Dispatcher,
-	validatorManager score.ValidatorManager, metachainWitness witness.ChainWitness) *ConsensusEngine {
+	validatorManager score.ValidatorManager) *ConsensusEngine {
 	e := &ConsensusEngine{
 		chain:      chain,
 		dispatcher: dispatcher,
@@ -86,7 +84,7 @@ func NewConsensusEngine(privateKey *crypto.PrivateKey, db store.Store, chain *sb
 		voteTimerReady: false,
 		blockProcessed: false,
 
-		metachainWitness: metachainWitness,
+		// metachainWitness: metachainWitness,
 	}
 
 	logger = util.GetLoggerForModule("consensus")
@@ -635,12 +633,12 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 	go e.pruneState(block.Height)
 	pruneStateTime := time.Since(start1)
 
-	if hasValidatorUpdate, ok := result.Info["hasValidatorUpdate"]; ok {
-		hasValidatorUpdateBool := hasValidatorUpdate.(bool)
-		if hasValidatorUpdateBool {
-			e.chain.MarkBlockHasValidatorUpdate(block.Hash())
-		}
-	}
+	// if hasValidatorUpdate, ok := result.Info["hasValidatorUpdate"]; ok {
+	// 	hasValidatorUpdateBool := hasValidatorUpdate.(bool)
+	// 	if hasValidatorUpdateBool {
+	// 		e.chain.MarkBlockHasValidatorUpdate(block.Hash())
+	// 	}
+	// }
 
 	e.chain.MarkBlockValid(block.Hash())
 
@@ -748,20 +746,19 @@ func (e *ConsensusEngine) broadcastVote(vote score.Vote) {
 }
 
 func (e *ConsensusEngine) createVote(block *score.Block) score.Vote {
-	mainchainHeightBigInt, err := e.metachainWitness.GetMainchainBlockHeight()
-	var mainchainHeight uint64
-	if err != nil {
-		mainchainHeight = 0
-	} else {
-		mainchainHeight = mainchainHeightBigInt.Uint64()
-	}
+	// mainchainHeightBigInt, err := e.metachainWitness.GetMainchainBlockHeight()
+	// var mainchainHeight uint64
+	// if err != nil {
+	// 	mainchainHeight = 0
+	// } else {
+	// 	mainchainHeight = mainchainHeightBigInt.Uint64()
+	// }
 
 	vote := score.Vote{
-		Block:           block.Hash(),
-		Height:          block.Height,
-		MainchainHeight: mainchainHeight,
-		ID:              e.privateKey.PublicKey().Address(),
-		Epoch:           e.GetEpoch(),
+		Block:  block.Hash(),
+		Height: block.Height,
+		ID:     e.privateKey.PublicKey().Address(),
+		Epoch:  e.GetEpoch(),
 	}
 	vote.Sign(e.privateKey)
 	return vote
@@ -1010,6 +1007,7 @@ func (e *ConsensusEngine) shouldPropose(tip *score.ExtendedBlock, epoch uint64) 
 	return true
 }
 
+/*
 func (e *ConsensusEngine) validatorMajorityInTheSameDynasty(tip *score.ExtendedBlock) bool {
 	// Check if majority has greater block height.
 	epochVotes, err := e.state.GetEpochVotes()
@@ -1058,6 +1056,7 @@ func (e *ConsensusEngine) validatorMajorityInTheSameDynasty(tip *score.ExtendedB
 
 	return true
 }
+*/
 
 func (e *ConsensusEngine) shouldProposeByID(previousBlock common.Hash, epoch uint64, id string) bool {
 	if epoch == 0 { // special handling for genesis epoch
@@ -1076,7 +1075,8 @@ func (e *ConsensusEngine) shouldProposeByID(previousBlock common.Hash, epoch uin
 	return true
 }
 
-func (e *ConsensusEngine) createProposal(validatorMajorityInTheSameDynasty bool) (score.Proposal, error) {
+// func (e *ConsensusEngine) createProposal(validatorMajorityInTheSameDynasty bool) (score.Proposal, error) {
+func (e *ConsensusEngine) createProposal() (score.Proposal, error) {
 	tip := e.GetTipToExtend()
 	//result := e.ledger.ResetState(tip.Height, tip.StateHash)
 	result := e.ledger.ResetState(tip.Block)
@@ -1111,9 +1111,10 @@ func (e *ConsensusEngine) createProposal(validatorMajorityInTheSameDynasty bool)
 	block.HCC.Votes = e.chain.FindVotesByHash(block.HCC.BlockHash).UniqueVoter().FilterByValidators(hccValidators)
 
 	// Add Txs.
-	newRoot, txs, result := e.ledger.ProposeBlockTxs(block, validatorMajorityInTheSameDynasty)
+	// newRoot, txs, result := e.ledger.ProposeBlockTxs(block, validatorMajorityInTheSameDynasty)
+	newRoot, txs, result := e.ledger.ProposeBlockTxs(block)
 	if result.IsError() || result.IsUndecided() { // the proposer should NOT propose a block that is either invalid or undecided
-		err := fmt.Errorf("Failed to collect Txs for block proposal: %v", result.String())
+		err := fmt.Errorf("failed to collect Txs for block proposal: %v", result.String())
 		return score.Proposal{}, err
 	}
 	block.AddTxs(txs)
@@ -1153,7 +1154,7 @@ func (e *ConsensusEngine) propose() {
 		return
 	}
 
-	validatorMajorityInTheSameDynasty := e.validatorMajorityInTheSameDynasty(tip)
+	// validatorMajorityInTheSameDynasty := e.validatorMajorityInTheSameDynasty(tip)
 	var proposal score.Proposal
 	var err error
 	lastProposal := e.state.GetLastProposal()
@@ -1161,7 +1162,7 @@ func (e *ConsensusEngine) propose() {
 		proposal = lastProposal
 		e.logger.WithFields(log.Fields{"proposal": proposal}).Info("Repeating proposal")
 	} else {
-		proposal, err = e.createProposal(validatorMajorityInTheSameDynasty)
+		proposal, err = e.createProposal()
 		if err != nil {
 			e.logger.WithFields(log.Fields{"error": err}).Error("Failed to create proposal")
 			return

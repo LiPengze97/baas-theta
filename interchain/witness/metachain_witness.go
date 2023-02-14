@@ -584,7 +584,7 @@ func (mw *MetachainWitness) updateValidatorSetCache(dynasty *big.Int) (*score.Va
 		return nil, fmt.Errorf("the length of validatorAddrs and validatorStakes are not equal")
 	}
 
-	validatorSet := score.NewValidatorSet(dynasty)
+	validatorSet := score.NewValidatorSet()
 	for i := 0; i < len(validatorAddrs); i++ {
 		validator := score.NewValidator(validatorAddrs[i].Hex(), validatorStakes[i])
 		validatorSet.AddValidator(validator)

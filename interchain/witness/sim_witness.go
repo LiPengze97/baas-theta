@@ -212,7 +212,7 @@ func (mw *SimulatedMetachainWitness) updateValidatorSetCache(dynasty *big.Int) (
 	validatorAddrList := []string{
 		"0x2E833968E5bB786Ae419c4d13189fB081Cc43bab",
 	}
-	validatorSet := score.NewValidatorSet(dynasty)
+	validatorSet := score.NewValidatorSet()
 	stake := big.NewInt(100000000)
 	v := score.NewValidator(validatorAddrList[0], stake)
 	validatorSet.AddValidator(v)

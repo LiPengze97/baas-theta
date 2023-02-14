@@ -140,7 +140,7 @@ func (m *RotatingValidatorManager) GetNextValidatorSet(blockHash common.Hash) *s
 //
 
 func FilterValidators(vs *score.ValidatorSet) *score.ValidatorSet {
-	valSet := score.NewValidatorSet(vs.Dynasty())
+	valSet := score.NewValidatorSet()
 	for _, validatorCandidate := range vs.Validators() {
 		valAddr := validatorCandidate.Address.Hex()
 		valStake := validatorCandidate.Stake

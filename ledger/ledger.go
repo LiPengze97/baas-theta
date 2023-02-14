@@ -21,9 +21,7 @@ import (
 	"github.com/thetatoken/theta/store/database"
 
 	sbc "github.com/thetatoken/thetasubchain/blockchain"
-	scom "github.com/thetatoken/thetasubchain/common"
 	score "github.com/thetatoken/thetasubchain/core"
-	"github.com/thetatoken/thetasubchain/interchain/witness"
 	sexec "github.com/thetatoken/thetasubchain/ledger/execution"
 	slst "github.com/thetatoken/thetasubchain/ledger/state"
 	stypes "github.com/thetatoken/thetasubchain/ledger/types"
@@ -49,24 +47,24 @@ type Ledger struct {
 	state    *slst.LedgerState
 	executor *sexec.Executor
 
-	metachainWitness witness.ChainWitness
+	// metachainWitness witness.ChainWitness
 }
 
 // NewLedger creates an instance of Ledger
 func NewLedger(chainID string, db database.Database, tagger slst.Tagger, chain *sbc.Chain, consensus score.ConsensusEngine,
-	valMgr score.ValidatorManager, mempool *smp.Mempool, metachainWitness witness.ChainWitness) *Ledger {
+	valMgr score.ValidatorManager, mempool *smp.Mempool) *Ledger {
 	state := slst.NewLedgerState(chainID, db, tagger)
 	ledger := &Ledger{
-		db:               db,
-		chain:            chain,
-		consensus:        consensus,
-		valMgr:           valMgr,
-		mempool:          mempool,
-		mu:               &sync.RWMutex{},
-		state:            state,
-		metachainWitness: metachainWitness,
+		db:        db,
+		chain:     chain,
+		consensus: consensus,
+		valMgr:    valMgr,
+		mempool:   mempool,
+		mu:        &sync.RWMutex{},
+		state:     state,
+		// metachainWitness: metachainWitness,
 	}
-	executor := sexec.NewExecutor(db, chain, state, consensus, valMgr, ledger, metachainWitness)
+	executor := sexec.NewExecutor(db, chain, state, consensus, valMgr, ledger)
 	ledger.SetExecutor(executor)
 
 	return ledger
@@ -240,7 +238,7 @@ func (ledger *Ledger) ScreenTx(rawTx common.Bytes) (txInfo *score.TxInfo, res re
 
 // ProposeBlockTxs collects and executes a list of transactions, which will be used to assemble the next blockl
 // It also clears these transactions from the mempool.
-func (ledger *Ledger) ProposeBlockTxs(block *score.Block, validatorMajorityInTheSameDynasty bool) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result) {
+func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result) {
 	// Must always acquire locks in following order to avoid deadlock: mempool, ledger.
 	// Otherwise, could cause deadlock since mempool.InsertTransaction() also first acquires the mempool, and then the ledger lock
 	logger.Debugf("ProposeBlockTxs: Propose block transactions, block.height = %v", block.Height)
@@ -263,7 +261,7 @@ func (ledger *Ledger) ProposeBlockTxs(block *score.Block, validatorMajorityInThe
 
 	// Add special transactions
 	rawTxCandidates := []common.Bytes{}
-	ledger.addSpecialTransactions(block, view, &rawTxCandidates, validatorMajorityInTheSameDynasty)
+	ledger.addSpecialTransactions(block, view, &rawTxCandidates)
 
 	// Add regular transactions submitted by the clients
 	regularRawTxs := ledger.mempool.ReapUnsafe(score.MaxNumRegularTxsPerBlock)
@@ -619,7 +617,7 @@ func (ledger *Ledger) shouldSkipCheckTx(tx types.Tx) bool {
 }
 
 // addSpecialTransactions adds special transactions (e.g. coinbase transaction, slash transaction) to the block
-func (ledger *Ledger) addSpecialTransactions(block *score.Block, view *slst.StoreView, rawTxs *[]common.Bytes, validatorMajorityInTheSameDynasty bool) {
+func (ledger *Ledger) addSpecialTransactions(block *score.Block, view *slst.StoreView, rawTxs *[]common.Bytes) {
 	if block == nil {
 		logger.Warnf("addSpecialTransactions: block is nil")
 		return
@@ -639,12 +637,12 @@ func (ledger *Ledger) addSpecialTransactions(block *score.Block, view *slst.Stor
 
 	// Here we add the subchain validator set update tx regardless whether the validator set has changed, since
 	// the token bank contracts need to query the validator set of each dynasty
-	enteringNewDynasty, newDynasty, newValidatorSet := ledger.getNewDynastyAndValidatorSet(view)
-	if enteringNewDynasty && validatorMajorityInTheSameDynasty {
-		ledger.addSubchainValidatorSetUpdateTx(view, &proposer, newDynasty, newValidatorSet, rawTxs)
-	}
-	logger.Debugf("Checking whether to add subchain validator update transactions: validatorMajorityInTheSameDynasty: %v, enteringNewDynasty: %v, newDynasty: %v, newValidatorSet: %v",
-		validatorMajorityInTheSameDynasty, enteringNewDynasty, newDynasty, newValidatorSet)
+	// enteringNewDynasty, newDynasty, newValidatorSet := ledger.getNewDynastyAndValidatorSet(view)
+	// if enteringNewDynasty && validatorMajorityInTheSameDynasty {
+	// 	ledger.addSubchainValidatorSetUpdateTx(view, &proposer, newDynasty, newValidatorSet, rawTxs)
+	// }
+	// logger.Debugf("Checking whether to add subchain validator update transactions: validatorMajorityInTheSameDynasty: %v, enteringNewDynasty: %v, newDynasty: %v, newValidatorSet: %v",
+	// 	validatorMajorityInTheSameDynasty, enteringNewDynasty, newDynasty, newValidatorSet)
 
 	// hasValidatorSetUpdate, newDynasty, newValidatorSet := ledger.hasSubchainValidatorSetUpdate(currentValidatorSet, view)
 	// logger.Debugf("Add special transactions: validatorMajorityInTheSameDynasty: %v, hasValidatorSetUpdate: %v, newDynasty: %v, newValidatorSet: %v",
@@ -654,6 +652,7 @@ func (ledger *Ledger) addSpecialTransactions(block *score.Block, view *slst.Stor
 	// }
 }
 
+/*
 func (ledger *Ledger) getNewDynastyAndValidatorSet(view *slst.StoreView) (enteringNewDynasty bool, newDynasty *big.Int, newValidatorSet *score.ValidatorSet) {
 	// Note that here we get the "current" dynasty from the view, even though the block containing the
 	// validator set update is NOT finalized yet (typically needs two blocks). Otherwise, if we instead
@@ -690,7 +689,9 @@ func (ledger *Ledger) getNewDynastyAndValidatorSet(view *slst.StoreView) (enteri
 
 	return true, witnessedDynasty, witnessedValidatorSet
 }
+*/
 
+/*
 // Not used
 func (ledger *Ledger) hasSubchainValidatorSetUpdate(currentValidatorSet *score.ValidatorSet, view *slst.StoreView) (bool, *big.Int, *score.ValidatorSet) {
 	currentDynasty := currentValidatorSet.Dynasty()
@@ -732,6 +733,7 @@ func (ledger *Ledger) hasSubchainValidatorSetUpdate(currentValidatorSet *score.V
 
 	return true, witnessedDynasty, witnessedValidatorSet
 }
+*/
 
 // addCoinbaseTx adds a Coinbase transaction
 func (ledger *Ledger) addCoinbaseTx(view *slst.StoreView, proposer *score.Validator,

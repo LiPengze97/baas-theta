@@ -18,12 +18,9 @@ import (
 	"github.com/thetatoken/theta/store/kvstore"
 
 	sbc "github.com/thetatoken/thetasubchain/blockchain"
-	scom "github.com/thetatoken/thetasubchain/common"
 	sconsensus "github.com/thetatoken/thetasubchain/consensus"
 	score "github.com/thetatoken/thetasubchain/core"
-	"github.com/thetatoken/thetasubchain/interchain/orchestrator"
 	siu "github.com/thetatoken/thetasubchain/interchain/utils"
-	"github.com/thetatoken/thetasubchain/interchain/witness"
 
 	sld "github.com/thetatoken/thetasubchain/ledger"
 	smp "github.com/thetatoken/thetasubchain/mempool"
@@ -44,8 +41,8 @@ type Node struct {
 	Mempool              *smp.Mempool
 	RPC                  *srpc.ThetaRPCServer
 	InterChainEventCache *siu.InterChainEventCache
-	MainchainWitness     witness.ChainWitness
-	Orchestrator         orchestrator.ChainOrchestrator
+	// MainchainWitness     witness.ChainWitness
+	// Orchestrator         orchestrator.ChainOrchestrator
 
 	// reporter *srp.Reporter
 
@@ -87,24 +84,24 @@ func NewNode(params *Params) *Node {
 	// 	params.ChainID,
 	// 	interChainEventCache,
 	// 	0)
-	metachainWitness := witness.NewMetachainWitness(
-		params.DB,
-		viper.GetInt(scom.CfgSubchainUpdateIntervalInMilliseconds),
-		interChainEventCache)
-	orchestrator := orchestrator.NewOrchestrator(
-		params.DB,
-		viper.GetInt(scom.CfgSubchainUpdateIntervalInMilliseconds),
-		interChainEventCache,
-		metachainWitness,
-		params.PrivateKey,
-	)
+	// metachainWitness := witness.NewMetachainWitness(
+	// 	params.DB,
+	// 	viper.GetInt(scom.CfgSubchainUpdateIntervalInMilliseconds),
+	// 	interChainEventCache)
+	// orchestrator := orchestrator.NewOrchestrator(
+	// 	params.DB,
+	// 	viper.GetInt(scom.CfgSubchainUpdateIntervalInMilliseconds),
+	// 	interChainEventCache,
+	// 	metachainWitness,
+	// 	params.PrivateKey,
+	// )
 
-	consensus := sconsensus.NewConsensusEngine(params.PrivateKey, store, chain, dispatcher, validatorManager, metachainWitness)
+	consensus := sconsensus.NewConsensusEngine(params.PrivateKey, store, chain, dispatcher, validatorManager)
 	// reporter := srp.NewReporter(dispatcher, consensus, chain)
 
 	syncMgr := snsync.NewSyncManager(chain, consensus, params.NetworkOld, params.Network, dispatcher, consensus)
 	mempool := smp.CreateMempool(dispatcher, consensus)
-	ledger := sld.NewLedger(params.ChainID, params.RollingDB, params.RollingDB, chain, consensus, validatorManager, mempool, metachainWitness)
+	ledger := sld.NewLedger(params.ChainID, params.RollingDB, params.RollingDB, chain, consensus, validatorManager, mempool)
 
 	validatorManager.SetConsensusEngine(consensus)
 	consensus.SetLedger(ledger)
@@ -137,8 +134,8 @@ func NewNode(params *Params) *Node {
 			state.SetLastProposal(score.Proposal{})
 		}
 	}
-	metachainWitness.SetSubchainTokenBanks(ledger)
-	orchestrator.SetLedgerAndSubchainTokenBanks(ledger)
+	// metachainWitness.SetSubchainTokenBanks(ledger)
+	// orchestrator.SetLedgerAndSubchainTokenBanks(ledger)
 	node := &Node{
 		Store:                store,
 		Chain:                chain,
@@ -149,8 +146,8 @@ func NewNode(params *Params) *Node {
 		Ledger:               ledger,
 		Mempool:              mempool,
 		InterChainEventCache: interChainEventCache,
-		MainchainWitness:     metachainWitness,
-		Orchestrator:         orchestrator,
+		// MainchainWitness:     metachainWitness,
+		// Orchestrator:         orchestrator,
 		// reporter:             reporter,
 	}
 
@@ -171,8 +168,8 @@ func (n *Node) Start(ctx context.Context) {
 	n.Dispatcher.Start(n.ctx)
 	n.Mempool.Start(n.ctx)
 	// n.reporter.Start(n.ctx)
-	n.MainchainWitness.Start(n.ctx)
-	n.Orchestrator.Start(n.ctx)
+	// n.MainchainWitness.Start(n.ctx)
+	// n.Orchestrator.Start(n.ctx)
 
 	if viper.GetBool(common.CfgRPCEnabled) {
 		n.RPC.Start(n.ctx)
@@ -188,7 +185,7 @@ func (n *Node) Stop() {
 func (n *Node) Wait() {
 	n.Consensus.Wait()
 	n.SyncManager.Wait()
-	n.MainchainWitness.Wait()
+	// n.MainchainWitness.Wait()
 
 	if n.RPC != nil {
 		n.RPC.Wait()

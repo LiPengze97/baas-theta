@@ -33,14 +33,13 @@ type SubchainValidatorSetUpdateTxExecutor struct {
 
 // NewSubchainValidatorSetUpdateTxExecutor creates a new instance of SubchainValidatorSetUpdateTxExecutor
 func NewSubchainValidatorSetUpdateTxExecutor(db database.Database, chain *sbc.Chain, state *slst.LedgerState, consensus score.ConsensusEngine,
-	valMgr score.ValidatorManager, metachainWitness witness.ChainWitness) *SubchainValidatorSetUpdateTxExecutor {
+	valMgr score.ValidatorManager) *SubchainValidatorSetUpdateTxExecutor {
 	return &SubchainValidatorSetUpdateTxExecutor{
-		db:               db,
-		chain:            chain,
-		state:            state,
-		consensus:        consensus,
-		valMgr:           valMgr,
-		metachainWitness: metachainWitness,
+		db:        db,
+		chain:     chain,
+		state:     state,
+		consensus: consensus,
+		valMgr:    valMgr,
 	}
 }
 
@@ -89,7 +88,7 @@ func (exec *SubchainValidatorSetUpdateTxExecutor) process(chainID string, view *
 
 	// new validator set and dynasty from the transaction
 	newDynasty := tx.Dynasty
-	newValidatorSet := score.NewValidatorSet(newDynasty)
+	newValidatorSet := score.NewValidatorSet()
 
 	for _, v := range tx.Validators {
 		// AddValidator() sorts the validator set, which ensures the order of the validators is determinstic

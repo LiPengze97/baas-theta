@@ -117,13 +117,13 @@ func (et *execTest) reset() {
 
 	propser := score.NewValidator(et.accProposer.PrivKey.PublicKey().Address().String(), new(big.Int).SetUint64(999))
 	val2 := score.NewValidator(et.accVal2.PrivKey.PublicKey().Address().String(), new(big.Int).SetUint64(100))
-	valSet := score.NewValidatorSet(big.NewInt(0))
+	valSet := score.NewValidatorSet()
 	valSet.AddValidator(propser)
 	valSet.AddValidator(val2)
 	valMgr := NewTestValidatorManager(propser, valSet)
 
 	chain := sbc.CreateTestChain()
-	executor := NewExecutor(db, chain, ledgerState, consensus, valMgr, nil, nil)
+	executor := NewExecutor(db, chain, ledgerState, consensus, valMgr, nil)
 
 	et.chainID = chainID
 	et.executor = executor

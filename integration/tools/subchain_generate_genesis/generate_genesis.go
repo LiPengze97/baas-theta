@@ -114,7 +114,7 @@ func generateGenesisSnapshot(mainchainID, subchainID, initValidatorSetFilePath, 
 	sv := slst.NewStoreView(0, common.Hash{}, db)
 
 	setInitialValidatorSet(subchainID, initValidatorSetFilePath, genesisHeight, sv)
-	deployInitialSmartContracts(mainchainID, subchainID, admin, fallbackReceiver, sv)
+	// deployInitialSmartContracts(mainchainID, subchainID, admin, fallbackReceiver, sv)
 
 	stateHash := sv.Hash()
 
@@ -155,8 +155,7 @@ func setInitialValidatorSet(subchainID string, initValidatorSetFilePath string, 
 	// validatorInitialBalance = big.NewInt(1).Mul(validatorInitialBalance, numInitialTFuelCrossChainTransfers)
 
 	json.Unmarshal(initValidatorSetByteValue, &validators)
-	initialDynasty := big.NewInt(0)
-	validatorSet := score.NewValidatorSet(initialDynasty)
+	validatorSet := score.NewValidatorSet()
 	for _, v := range validators {
 		stake, ok := big.NewInt(0).SetString(v.Stake, 10)
 		if !ok {
