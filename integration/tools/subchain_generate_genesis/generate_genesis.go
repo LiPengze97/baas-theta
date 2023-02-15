@@ -3,14 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -23,10 +21,7 @@ import (
 
 	scom "github.com/thetatoken/thetasubchain/common"
 	score "github.com/thetatoken/thetasubchain/core"
-	"github.com/thetatoken/thetasubchain/eth/abi"
-	"github.com/thetatoken/thetasubchain/interchain/contracts/predeployed"
 	slst "github.com/thetatoken/thetasubchain/ledger/state"
-	svm "github.com/thetatoken/thetasubchain/ledger/vm"
 	ststore "github.com/thetatoken/thetasubchain/store/treestore"
 )
 
@@ -164,7 +159,8 @@ func setInitialValidatorSet(subchainID string, initValidatorSetFilePath string, 
 		validator := score.NewValidator(v.Address, stake)
 		validatorSet.AddValidator(validator)
 
-		setInitialBalance(sv, common.HexToAddress(v.Address), common.Big0) // need to create accounts with zero balances for the inital validators
+		initialVal := big.NewInt(2000000000000000000)
+		setInitialBalance(sv, common.HexToAddress(v.Address), initialVal)
 	}
 	subchainIDInt := scom.MapChainID(subchainID)
 	sv.UpdateValidatorSet(subchainIDInt, validatorSet)
@@ -183,7 +179,7 @@ func setInitialBalance(sv *slst.StoreView, address common.Address, tfuelBalance 
 		Root:     common.Hash{},
 		CodeHash: types.EmptyCodeHash,
 		Balance: types.Coins{
-			ThetaWei: big.NewInt(0),
+			ThetaWei: big.NewInt(12345670000000),
 			TFuelWei: tfuelBalance,
 		},
 	}
@@ -197,6 +193,7 @@ func proveValidatorSet(sv *slst.StoreView) (*score.ValidatorSetProof, error) {
 	return vp, err
 }
 
+/*
 func deployInitialSmartContracts(mainchainID, subchainID string, admin common.Address, fallbackReceiver common.Address, sv *slst.StoreView) {
 	mainchainIDInt := scom.MapChainID(mainchainID)
 	deployer := common.Address{}
@@ -289,6 +286,7 @@ func addConstructorArgumentForChainRegistrarBytecode(contractBytecode string, nu
 	return ff
 }
 
+
 // Reference: https://docs.blockscout.com/for-users/abi-encoded-constructor-arguments
 func addConstructorArgumentForTokenBankBytecode(contractBytecode string, mainchainIDInt *big.Int, chainRegistrarContractAddr common.Address) string {
 	rawABI := `[
@@ -352,6 +350,7 @@ func deploySmartContract(subchainID string, sv *slst.StoreView, contractBytecode
 
 	return contractAddr, nil
 }
+*/
 
 // writeGenesisSnapshot writes genesis snapshot to file system.
 func writeGenesisSnapshot(db database.Database, sv *slst.StoreView, metadata *score.SnapshotMetadata, genesisSnapshotFilePath string) error {
@@ -448,38 +447,38 @@ func sanityChecks(sv *slst.StoreView) error {
 		return true
 	})
 
-	chainRegistrarContractAddr := sv.GetChainRegistrarContractAddress()
-	if chainRegistrarContractAddr == nil {
-		panic("Chain registrar contract is not set")
-	}
-	logger.Infof("Chain Registrar    Contract Address: %v", chainRegistrarContractAddr.Hex())
-	tfuelTokenBankContractAddr := sv.GetTFuelTokenBankContractAddress()
-	if tfuelTokenBankContractAddr == nil {
-		panic("TFuel token bank contract is not set")
-	}
-	logger.Infof("TFuel   Token Bank Contract Address: %v", tfuelTokenBankContractAddr.Hex())
-	tnt20TokenBankContractAddr := sv.GetTNT20TokenBankContractAddress()
-	if tnt20TokenBankContractAddr == nil {
-		panic("TNT20 token bank contract is not set")
-	}
-	logger.Infof("TNT20   Token Bank Contract Address: %v", tnt20TokenBankContractAddr.Hex())
-	tnt721TokenBankContractAddr := sv.GetTNT721TokenBankContractAddress()
-	if tnt721TokenBankContractAddr == nil {
-		panic("TNT721 token bank contract is not set")
-	}
-	logger.Infof("TNT721  Token Bank Contract Address: %v", tnt721TokenBankContractAddr.Hex())
+	// chainRegistrarContractAddr := sv.GetChainRegistrarContractAddress()
+	// if chainRegistrarContractAddr == nil {
+	// 	panic("Chain registrar contract is not set")
+	// }
+	// logger.Infof("Chain Registrar    Contract Address: %v", chainRegistrarContractAddr.Hex())
+	// tfuelTokenBankContractAddr := sv.GetTFuelTokenBankContractAddress()
+	// if tfuelTokenBankContractAddr == nil {
+	// 	panic("TFuel token bank contract is not set")
+	// }
+	// logger.Infof("TFuel   Token Bank Contract Address: %v", tfuelTokenBankContractAddr.Hex())
+	// tnt20TokenBankContractAddr := sv.GetTNT20TokenBankContractAddress()
+	// if tnt20TokenBankContractAddr == nil {
+	// 	panic("TNT20 token bank contract is not set")
+	// }
+	// logger.Infof("TNT20   Token Bank Contract Address: %v", tnt20TokenBankContractAddr.Hex())
+	// tnt721TokenBankContractAddr := sv.GetTNT721TokenBankContractAddress()
+	// if tnt721TokenBankContractAddr == nil {
+	// 	panic("TNT721 token bank contract is not set")
+	// }
+	// logger.Infof("TNT721  Token Bank Contract Address: %v", tnt721TokenBankContractAddr.Hex())
 
-	tnt1155TokenBankContractAddr := sv.GetTNT1155TokenBankContractAddress()
-	if tnt1155TokenBankContractAddr == nil {
-		panic("TNT1155 token bank contract is not set")
-	}
-	logger.Infof("TNT1155 Token Bank Contract Address: %v", tnt1155TokenBankContractAddr.Hex())
+	// tnt1155TokenBankContractAddr := sv.GetTNT1155TokenBankContractAddress()
+	// if tnt1155TokenBankContractAddr == nil {
+	// 	panic("TNT1155 token bank contract is not set")
+	// }
+	// logger.Infof("TNT1155 Token Bank Contract Address: %v", tnt1155TokenBankContractAddr.Hex())
 
-	balanceCheckerContractAddr := sv.GetBalanceCheckerContractAddress()
-	if balanceCheckerContractAddr == nil {
-		panic("Balance checker contract is not set")
-	}
-	logger.Infof("Balance Checker    Contract Address: %v", balanceCheckerContractAddr.Hex())
+	// balanceCheckerContractAddr := sv.GetBalanceCheckerContractAddress()
+	// if balanceCheckerContractAddr == nil {
+	// 	panic("Balance checker contract is not set")
+	// }
+	// logger.Infof("Balance Checker    Contract Address: %v", balanceCheckerContractAddr.Hex())
 
 	// Sanity checks for the initial validator set
 	vsProof, err := proveValidatorSet(sv)

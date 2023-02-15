@@ -1,6 +1,6 @@
 # Theta configuration
 genesis:
-  hash: "0xb9c57fe338e4a9f3a6be3d852ba6f156cb1e3321204743807745a6e45e30485c"
+  hash: "0x29461a3dbdc5024623f448d456b4530c31dd63510db74fba333d0e5bf3bf1844"
 p2p:
   port: 12100
 rpc:
