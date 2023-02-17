@@ -103,7 +103,102 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 	if asyncFlag {
 		res, err = client.Call("theta.BroadcastRawTransactionAsync", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
 	} else {
-		res, err = client.Call("theta.BroadcastRawTransaction", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
+		res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
+	}
+
+	if err != nil {
+		utils.Error("Failed to send sole transaction: %v\n", err)
+	}
+	if res.Error != nil {
+		utils.Error("Server returned error: %v\n", res.Error)
+	}
+	result := &rpc.SendSoleRawTransactionResult{}
+	err = res.GetObject(result)
+	if err != nil {
+		utils.Error("Failed to parse server response: %v\n", err)
+	}
+	formatted, err := json.MarshalIndent(result, "", "    ")
+	if err != nil {
+		utils.Error("Failed to parse server response: %v\n", err)
+	}
+	fmt.Printf("Successfully send sole transaction:\n%s\n", formatted)
+}
+
+/* broadcast version
+func doSendCmd(cmd *cobra.Command, args []string) {
+	walletType := getWalletType(cmd)
+	if walletType == wtypes.WalletTypeSoft && len(fromFlag) == 0 {
+		utils.Error("The from address cannot be empty") // we don't need to specify the "from address" for hardware wallets
+		return
+	}
+
+	if len(toFlag) == 0 {
+		utils.Error("The to address cannot be empty")
+		return
+	}
+	if fromFlag == toFlag {
+		utils.Error("The from and to address cannot be identical")
+		return
+	}
+
+	wallet, fromAddress, err := walletUnlockWithPath(cmd, fromFlag, pathFlag, passwordFlag)
+	if err != nil || wallet == nil {
+		return
+	}
+	defer wallet.Lock(fromAddress)
+
+	tfuel, ok := types.ParseCoinAmount(tfuelAmountFlag)
+	if !ok {
+		utils.Error("Failed to parse tfuel amount")
+	}
+	fee, ok := types.ParseCoinAmount(feeFlag)
+	if !ok {
+		utils.Error("Failed to parse fee")
+	}
+	inputs := []types.TxInput{{
+		Address: fromAddress,
+		Coins: types.Coins{
+			TFuelWei: new(big.Int).Add(tfuel, fee),
+			ThetaWei: new(big.Int).SetUint64(0),
+		},
+		Sequence: uint64(seqFlag),
+	}}
+	outputs := []types.TxOutput{{
+		Address: common.HexToAddress(toFlag),
+		Coins: types.Coins{
+			TFuelWei: tfuel,
+			ThetaWei: new(big.Int).SetUint64(0),
+		},
+	}}
+	sendTx := &types.SendTx{
+		Fee: types.Coins{
+			ThetaWei: new(big.Int).SetUint64(0),
+			TFuelWei: fee,
+		},
+		Inputs:  inputs,
+		Outputs: outputs,
+	}
+
+	sig, err := wallet.Sign(fromAddress, sendTx.SignBytes(chainIDFlag))
+	if err != nil {
+		utils.Error("Failed to sign transaction: %v\n", err)
+	}
+	sendTx.SetSignature(fromAddress, sig)
+
+	raw, err := stypes.TxToBytes(sendTx)
+	if err != nil {
+		utils.Error("Failed to encode transaction: %v\n", err)
+	}
+	signedTx := hex.EncodeToString(raw)
+
+	client := rpcc.NewRPCClient(viper.GetString(utils.CfgRemoteRPCEndpoint))
+
+	var res *jsonrpc.RPCResponse
+	if asyncFlag {
+		res, err = client.Call("theta.BroadcastRawTransactionAsync", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
+	} else {
+		// res, err = client.Call("theta.BroadcastRawTransaction", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
+		res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
 	}
 
 	if err != nil {
@@ -123,6 +218,7 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 	}
 	fmt.Printf("Successfully broadcasted transaction:\n%s\n", formatted)
 }
+*/
 
 func init() {
 	sendCmd.Flags().StringVar(&chainIDFlag, "chain", "", "Chain ID")

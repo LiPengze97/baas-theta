@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,14 +20,15 @@ const (
 )
 
 var (
-	EmptyRootHash    = CalculateRootHash([]common.Bytes{})
+	EmptyRootHash    = CalculateRootHash([]common.Hash{})
 	SuicidedCodeHash = common.HexToHash("deaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead")
 )
 
 // Block represents a block in chain.
 type Block struct {
 	*BlockHeader
-	Txs []common.Bytes `json:"transactions"`
+	Txs []common.Hash `json:"transactions"`
+	// Txs []common.Bytes `json:"transactions"`
 }
 
 // NewBlock creates a new Block.
@@ -42,9 +42,9 @@ func (b *Block) String() string {
 	}
 	txs := []string{}
 	for _, tx := range b.Txs {
-		txs = append(txs, hex.EncodeToString(tx))
+		txs = append(txs, tx.String())
 	}
-	return fmt.Sprintf("Block{Header: %v, Txs: %v}", b.BlockHeader, txs)
+	return fmt.Sprintf("Block{Header: %v, Txs: %v, coinbase: %v}", b.BlockHeader, txs)
 }
 
 var _ rlp.Encoder = (*Block)(nil)
@@ -74,7 +74,7 @@ func (b *Block) DecodeRLP(stream *rlp.Stream) error {
 	}
 	b.BlockHeader = h
 
-	txs := []common.Bytes{}
+	txs := []common.Hash{}
 	err = stream.Decode(&txs)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (b *Block) DecodeRLP(stream *rlp.Stream) error {
 }
 
 // AddTxs adds transactions to the block and update transaction root hash.
-func (b *Block) AddTxs(txs []common.Bytes) {
+func (b *Block) AddTxs(txs []common.Hash) {
 	b.Txs = append(b.Txs, txs...)
 	b.updateTxHash()
 }
@@ -108,13 +108,13 @@ func (b *Block) Validate(chainID string) result.Result {
 	return result.OK
 }
 
-func CalculateRootHash(items []common.Bytes) common.Hash {
+func CalculateRootHash(items []common.Hash) common.Hash {
 	keybuf := new(bytes.Buffer)
 	trie := new(trie.Trie)
 	for i := 0; i < len(items); i++ {
 		keybuf.Reset()
 		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), items[i])
+		trie.Update(keybuf.Bytes(), items[i].Bytes())
 	}
 	return trie.Hash()
 }

@@ -12,7 +12,7 @@ import (
 
 const defaultMaxNumTxs = uint(200000)
 
-const maxTxLife = 1 * time.Minute
+const maxTxLife = 5 * time.Minute
 
 //
 // transactionBookkeeper keeps tracks of recently seen transactions
@@ -20,8 +20,9 @@ const maxTxLife = 1 * time.Minute
 type transactionBookkeeper struct {
 	mutex *sync.Mutex
 
-	txMap  map[string]*TxRecord // map: transaction hash -> bool
-	txList list.List            // FIFO list of transaction hashes
+	txMap      map[string]*TxRecord    // map: transaction hash -> bool
+	txBytesMap map[string]common.Bytes // map: transaction hash -> transaction bytes
+	txList     list.List               // FIFO list of transaction hashes
 
 	maxNumTxs uint
 }
@@ -45,9 +46,10 @@ const (
 
 func createTransactionBookkeeper(maxNumTxs uint) transactionBookkeeper {
 	return transactionBookkeeper{
-		mutex:     &sync.Mutex{},
-		txMap:     make(map[string]*TxRecord),
-		maxNumTxs: maxNumTxs,
+		mutex:      &sync.Mutex{},
+		txMap:      make(map[string]*TxRecord),
+		txBytesMap: make(map[string]common.Bytes),
+		maxNumTxs:  maxNumTxs,
 	}
 }
 
@@ -55,6 +57,7 @@ func (tb *transactionBookkeeper) reset() {
 	tb.mutex.Lock()
 	defer tb.mutex.Unlock()
 	tb.txMap = make(map[string]*TxRecord)
+	tb.txBytesMap = make(map[string]common.Bytes)
 	tb.txList.Init()
 }
 
@@ -86,6 +89,23 @@ func (tb *transactionBookkeeper) getStatus(txhash string) (TxStatus, bool) {
 	return txRecord.Status, true
 }
 
+// getBytes return the raw bytes of a tx.
+func (tb *transactionBookkeeper) getBytes(txhash string) (common.Bytes, bool) {
+	tb.mutex.Lock()
+	defer tb.mutex.Unlock()
+
+	// Remove outdated Tx records
+	tb.removeOutdatedTxsUnsafe()
+
+	txRecord, exists := tb.txBytesMap[txhash]
+
+	if !exists {
+		return common.Bytes{}, false
+	}
+
+	return txRecord, true
+}
+
 func (tb *transactionBookkeeper) removeOutdatedTxsUnsafe() {
 	// Loop and remove all outdated Tx records
 	for {
@@ -100,6 +120,7 @@ func (tb *transactionBookkeeper) removeOutdatedTxsUnsafe() {
 
 		if _, exists := tb.txMap[txRecord.Hash]; exists {
 			delete(tb.txMap, txRecord.Hash)
+			delete(tb.txBytesMap, txRecord.Hash)
 		}
 		tb.txList.Remove(el)
 	}
@@ -121,6 +142,7 @@ func (tb *transactionBookkeeper) record(rawTx common.Bytes) bool {
 		popped := tb.txList.Front()
 		poppedTxhash := popped.Value.(*TxRecord).Hash
 		delete(tb.txMap, poppedTxhash)
+		delete(tb.txBytesMap, poppedTxhash)
 		tb.txList.Remove(popped)
 	}
 
@@ -130,6 +152,7 @@ func (tb *transactionBookkeeper) record(rawTx common.Bytes) bool {
 		CreatedAt: time.Now(),
 	}
 	tb.txMap[txhash] = record
+	tb.txBytesMap[txhash] = rawTx
 
 	tb.txList.PushBack(record)
 
@@ -152,6 +175,7 @@ func (tb *transactionBookkeeper) remove(rawTx common.Bytes) {
 	defer tb.mutex.Unlock()
 	txhash := getTransactionHash(rawTx)
 	delete(tb.txMap, txhash)
+	delete(tb.txBytesMap, txhash)
 }
 
 func getTransactionHash(rawTx common.Bytes) string {

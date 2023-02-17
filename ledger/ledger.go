@@ -238,7 +238,7 @@ func (ledger *Ledger) ScreenTx(rawTx common.Bytes) (txInfo *score.TxInfo, res re
 
 // ProposeBlockTxs collects and executes a list of transactions, which will be used to assemble the next blockl
 // It also clears these transactions from the mempool.
-func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.Hash, blockRawTxs []common.Bytes, res result.Result) {
+func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.Hash, hashTxes []common.Hash, res result.Result) {
 	// Must always acquire locks in following order to avoid deadlock: mempool, ledger.
 	// Otherwise, could cause deadlock since mempool.InsertTransaction() also first acquires the mempool, and then the ledger lock
 	logger.Debugf("ProposeBlockTxs: Propose block transactions, block.height = %v", block.Height)
@@ -261,20 +261,21 @@ func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.
 
 	// Add special transactions
 	rawTxCandidates := []common.Bytes{}
-	ledger.addSpecialTransactions(block, view, &rawTxCandidates)
-
+	hashTxes = []common.Hash{}
+	// ledger.addSpecialTransactions(block, view, &rawTxCandidates)
+	// coinbaseTxBytes := rawTxCandidates[0]
 	// Add regular transactions submitted by the clients
 	regularRawTxs := ledger.mempool.ReapUnsafe(score.MaxNumRegularTxsPerBlock)
 	for _, regularRawTx := range regularRawTxs {
 		rawTxCandidates = append(rawTxCandidates, regularRawTx)
-		logger.Debugf("regular raw tx %v added to block", regularRawTx)
+		logger.Debugf("regular raw & hash tx %v added to block", regularRawTx)
 	}
 
 	logger.Debugf("ProposeBlockTxs: block transactions added, block.height = %v", block.Height)
 	addTxsTime := time.Since(start)
 	start = time.Now()
 
-	blockRawTxs = []common.Bytes{}
+	blockRawTxs := []common.Bytes{}
 	for _, rawTxCandidate := range rawTxCandidates {
 		tx, err := stypes.TxFromBytes(rawTxCandidate)
 		if err != nil {
@@ -286,6 +287,7 @@ func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.
 			logger.Errorf("Transaction check failed: errMsg = %v, tx = %v", res.Message, tx)
 			continue
 		}
+		hashTxes = append(hashTxes, crypto.Keccak256Hash(rawTxCandidate))
 		blockRawTxs = append(blockRawTxs, rawTxCandidate)
 	}
 
@@ -301,7 +303,7 @@ func (ledger *Ledger) ProposeBlockTxs(block *score.Block) (stateRootHash common.
 	logger.Debugf("ProposeBlockTxs: Done, block.height = %v, preparationTime = %v, addTxsTime = %v, execTxsTime = %v, handleDelayedUpdateTime = %v",
 		block.Height, preparationTime, addTxsTime, execTxsTime, handleDelayedUpdateTime)
 
-	return stateRootHash, blockRawTxs, result.OK
+	return stateRootHash, hashTxes, result.OK
 }
 
 // ApplyBlockTxs applies the given block transactions. If any of the transactions failed, it returns
@@ -318,7 +320,8 @@ func (ledger *Ledger) ApplyBlockTxs(block *score.Block) result.Result {
 	ledger.currentBlock = block
 	defer func() { ledger.currentBlock = nil }()
 
-	blockRawTxs := ledger.currentBlock.Txs
+	blockHashTxs := ledger.currentBlock.Txs
+	blockRawTxs := []common.Bytes{}
 	expectedStateRoot := ledger.currentBlock.StateHash
 
 	view := ledger.state.Delivered()
@@ -334,19 +337,24 @@ func (ledger *Ledger) ApplyBlockTxs(block *score.Block) result.Result {
 
 	hasValidatorUpdate := false
 	txProcessTime := []time.Duration{}
-	for _, rawTx := range blockRawTxs {
+	for _, hashTx := range blockHashTxs {
 		start := time.Now()
+		rawTx, success := ledger.mempool.GetRawTxBytes(hashTx.String())
+		if !success {
+			log.Panic("cannot find the raw Tx !")
+		}
+		blockRawTxs = append(blockRawTxs, rawTx)
 		tx, err := stypes.TxFromBytes(rawTx)
 		if err != nil {
 			//ledger.resetState(currHeight, currStateRoot)
 			ledger.resetState(parentBlock)
 			return result.Error("Failed to parse transaction: %v", hex.EncodeToString(rawTx))
 		}
-		if dtx, ok := tx.(*types.DepositStakeTx); ok && dtx.Purpose == score.StakeForValidator {
-			hasValidatorUpdate = true
-		} else if wtx, ok := tx.(*types.WithdrawStakeTx); ok && wtx.Purpose == score.StakeForValidator {
-			hasValidatorUpdate = true
-		}
+		// if dtx, ok := tx.(*types.DepositStakeTx); ok && dtx.Purpose == score.StakeForValidator {
+		// 	hasValidatorUpdate = true
+		// } else if wtx, ok := tx.(*types.WithdrawStakeTx); ok && wtx.Purpose == score.StakeForValidator {
+		// 	hasValidatorUpdate = true
+		// }
 		_, res := ledger.executor.ExecuteTx(tx)
 		if res.IsError() || res.IsUndecided() {
 			//ledger.resetState(currHeight, currStateRoot)
@@ -402,42 +410,46 @@ func (ledger *Ledger) ApplyBlockTxsForChainCorrection(block *score.Block) (commo
 	ledger.currentBlock = block
 	defer func() { ledger.currentBlock = nil }()
 
-	blockRawTxs := ledger.currentBlock.Txs
+	// blockRawTxs := ledger.currentBlock.Txs
 
 	view := ledger.state.Delivered()
 
-	//currHeight := view.Height()
-	//currStateRoot := view.Hash()
-	extParentBlock, err := ledger.chain.FindBlock(block.Parent)
-	if extParentBlock == nil || err != nil {
-		panic(fmt.Sprintf("Failed to find the parent block: %v, err: %v", block.Parent.Hex(), err))
-	}
-	parentBlock := extParentBlock.Block
-
-	hasValidatorUpdate := false
-	for _, rawTx := range blockRawTxs {
-		tx, err := stypes.TxFromBytes(rawTx)
-		if err != nil {
-			//ledger.resetState(currHeight, currStateRoot)
-			ledger.resetState(parentBlock)
-			return common.Hash{}, result.Error("Failed to parse transaction: %v", hex.EncodeToString(rawTx))
+	/*
+		//currHeight := view.Height()
+		//currStateRoot := view.Hash()
+		extParentBlock, err := ledger.chain.FindBlock(block.Parent)
+		if extParentBlock == nil || err != nil {
+			panic(fmt.Sprintf("Failed to find the parent block: %v, err: %v", block.Parent.Hex(), err))
 		}
-		if dtx, ok := tx.(*types.DepositStakeTx); ok && dtx.Purpose == score.StakeForValidator {
-			hasValidatorUpdate = true
-		} else if wtx, ok := tx.(*types.WithdrawStakeTx); ok && wtx.Purpose == score.StakeForValidator {
-			hasValidatorUpdate = true
-		}
-		_, res := ledger.executor.ExecuteTx(tx)
-		if res.IsError() || res.IsUndecided() {
-			//ledger.resetState(currHeight, currStateRoot)
-			ledger.resetState(parentBlock)
-			return common.Hash{}, res
-		}
-	}
+		parentBlock := extParentBlock.Block
 
-	ledger.state.Commit() // commit to persistent storage
+		hasValidatorUpdate := false
+		for _, rawTx := range blockRawTxs {
+			tx, err := stypes.TxFromBytes(rawTx)
+			if err != nil {
+				//ledger.resetState(currHeight, currStateRoot)
+				ledger.resetState(parentBlock)
+				return common.Hash{}, result.Error("Failed to parse transaction: %v", hex.EncodeToString(rawTx))
+			}
+			if dtx, ok := tx.(*types.DepositStakeTx); ok && dtx.Purpose == score.StakeForValidator {
+				hasValidatorUpdate = true
+			} else if wtx, ok := tx.(*types.WithdrawStakeTx); ok && wtx.Purpose == score.StakeForValidator {
+				hasValidatorUpdate = true
+			}
+			_, res := ledger.executor.ExecuteTx(tx)
+			if res.IsError() || res.IsUndecided() {
+				//ledger.resetState(currHeight, currStateRoot)
+				ledger.resetState(parentBlock)
+				return common.Hash{}, res
+			}
+		}
 
-	return view.Hash(), result.OKWith(result.Info{"hasValidatorUpdate": hasValidatorUpdate})
+		ledger.state.Commit() // commit to persistent storage
+
+
+		return view.Hash(), result.OKWith(result.Info{"hasValidatorUpdate": hasValidatorUpdate})
+	*/
+	return view.Hash(), result.OKWith(result.Info{"deprecated": false})
 }
 
 // PruneState attempts to prune the state up to the targetEndHeight

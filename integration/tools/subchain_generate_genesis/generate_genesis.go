@@ -159,7 +159,11 @@ func setInitialValidatorSet(subchainID string, initValidatorSetFilePath string, 
 		validator := score.NewValidator(v.Address, stake)
 		validatorSet.AddValidator(validator)
 
-		initialVal := big.NewInt(2000000000000000000)
+		initialVal, success := big.NewInt(1).SetString("1000000000000000000000000000000000000000000000", 10)
+		if !success {
+			log.Fatalf("failed to send initial value")
+		}
+
 		setInitialBalance(sv, common.HexToAddress(v.Address), initialVal)
 	}
 	subchainIDInt := scom.MapChainID(subchainID)
@@ -179,7 +183,7 @@ func setInitialBalance(sv *slst.StoreView, address common.Address, tfuelBalance 
 		Root:     common.Hash{},
 		CodeHash: types.EmptyCodeHash,
 		Balance: types.Coins{
-			ThetaWei: big.NewInt(12345670000000),
+			ThetaWei: tfuelBalance,
 			TFuelWei: tfuelBalance,
 		},
 	}

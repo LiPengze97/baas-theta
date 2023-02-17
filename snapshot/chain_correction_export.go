@@ -72,23 +72,23 @@ func ExportChainCorrection(chain *sbc.Chain, ledger score.Ledger, snapshotHeight
 	for _, exclusion := range exclusionTxs {
 		exclusionTxMap[exclusion] = true
 	}
+	/*
+		for {
+			block.Txs = ExcludeTxs(block.Txs, exclusionTxMap, chain)
+			block.TxHash = score.CalculateRootHash(block.Txs)
+			block.UpdateHash()
+			stack = append(stack, block)
 
-	for {
-		block.Txs = ExcludeTxs(block.Txs, exclusionTxMap, chain)
-		block.TxHash = score.CalculateRootHash(block.Txs)
-		block.UpdateHash()
-		stack = append(stack, block)
-
-		if block.Height <= snapshotHeight+1 {
-			break
+			if block.Height <= snapshotHeight+1 {
+				break
+			}
+			parentBlock, err := chain.FindBlock(block.Parent)
+			if err != nil {
+				return "", nil, fmt.Errorf("Can't find block for %v", block.Hash())
+			}
+			block = parentBlock
 		}
-		parentBlock, err := chain.FindBlock(block.Parent)
-		if err != nil {
-			return "", nil, fmt.Errorf("Can't find block for %v", block.Hash())
-		}
-		block = parentBlock
-	}
-
+	*/
 	// var bh common.Hash
 	var snapshot, parent *score.ExtendedBlock
 	blocks := chain.FindBlocksByHeight(snapshotHeight)

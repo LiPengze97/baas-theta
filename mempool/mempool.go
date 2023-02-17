@@ -264,6 +264,15 @@ func (mp *Mempool) Size() int {
 	return mp.size
 }
 
+// Returns the bytes for a tx
+func (mp *Mempool) GetRawTxBytes(txHash string) (common.Bytes, bool) {
+	txBytes, exists := mp.txBookeepper.getBytes(txHash[2:])
+	if exists {
+		return txBytes, true
+	}
+	return common.Bytes{}, false
+}
+
 // Reap returns a list of valid raw transactions and remove these
 // transactions from the candidate pool. maxNumTxs == 0 means
 // none, maxNumTxs < 0 means uncapped. Note that Reap does NOT remove

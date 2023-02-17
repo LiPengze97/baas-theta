@@ -26,13 +26,13 @@ type TxIndexEntry struct {
 
 // AddTxsToIndex adds transactions in given block to index.
 func (ch *Chain) AddTxsToIndex(block *score.ExtendedBlock, force bool) {
-	for idx, tx := range block.Txs {
+	for idx, txHash := range block.Txs {
 		txIndexEntry := TxIndexEntry{
 			BlockHash:   block.Hash(),
 			BlockHeight: block.Height,
 			Index:       uint64(idx),
 		}
-		txHash := crypto.Keccak256Hash(tx)
+		// txHash := crypto.Keccak256Hash(tx)
 		key := txIndexKey(txHash)
 
 		if !force {
@@ -48,7 +48,7 @@ func (ch *Chain) AddTxsToIndex(block *score.ExtendedBlock, force bool) {
 			logger.Panic(err)
 		}
 
-		ch.insertEthTxHash(block, tx, &txIndexEntry)
+		// ch.insertEthTxHash(block, tx, &txIndexEntry)
 	}
 }
 
@@ -69,19 +69,19 @@ func (ch *Chain) insertEthTxHash(block *score.ExtendedBlock, rawTxBytes []byte, 
 }
 
 // FindTxByHash looks up transaction by hash and additionally returns the containing block.
-func (ch *Chain) FindTxByHash(hash common.Hash) (tx common.Bytes, block *score.ExtendedBlock, founded bool) {
+func (ch *Chain) FindTxByHash(hash common.Hash) (tx common.Hash, block *score.ExtendedBlock, founded bool) {
 	txIndexEntry := &TxIndexEntry{}
 	err := ch.store.Get(txIndexKey(hash), txIndexEntry)
 	if err != nil {
 		if err != store.ErrKeyNotFound {
 			logger.Error(err)
 		}
-		return nil, nil, false
+		return common.Hash{}, nil, false
 	}
 	block, err = ch.FindBlock(txIndexEntry.BlockHash)
 	if err != nil {
 		if err == store.ErrKeyNotFound {
-			return nil, nil, false
+			return common.Hash{}, nil, false
 		}
 		logger.Panic(err)
 	}

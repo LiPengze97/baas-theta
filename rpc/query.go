@@ -148,7 +148,7 @@ func (t *ThetaRPCService) GetTransaction(args *GetTransactionArgs, result *GetTr
 	}
 	hash := common.HexToHash(args.Hash)
 
-	raw, block, found := t.chain.FindTxByHash(hash)
+	_, block, found := t.chain.FindTxByHash(hash)
 	if !found {
 		txStatus, exists := t.mempool.GetTransactionStatus(args.Hash)
 		if exists {
@@ -170,8 +170,11 @@ func (t *ThetaRPCService) GetTransaction(args *GetTransactionArgs, result *GetTr
 	} else {
 		result.Status = TxStatusPending
 	}
-
-	tx, err := stypes.TxFromBytes(raw)
+	rawbytes, success := t.mempool.GetRawTxBytes(args.Hash)
+	if !success {
+		return nil
+	}
+	tx, err := stypes.TxFromBytes(rawbytes)
 	if err != nil {
 		return err
 	}
@@ -181,7 +184,7 @@ func (t *ThetaRPCService) GetTransaction(args *GetTransactionArgs, result *GetTr
 	// args.Hash maybe an ETH tx hash, need to lookup the receipt using the hash of the corresponding native Smart contract Tx
 	canonicalTxHash := hash
 	if result.Type == TxTypeSmartContract {
-		canonicalTxHash = crypto.Keccak256Hash(raw)
+		canonicalTxHash = crypto.Keccak256Hash(rawbytes)
 	}
 	result.TxHash = canonicalTxHash
 
@@ -789,48 +792,50 @@ func (t *ThetaRPCService) GetStorageAt(args *GetStorageAtArgs, result *GetStorag
 func (t *ThetaRPCService) gatherTxs(block *score.ExtendedBlock, txs *[]interface{}, includeEthTxHashes bool) error {
 	// Parse and fulfill Txs.
 	//var tx types.Tx
-	for _, txBytes := range block.Txs {
-		tx, err := stypes.TxFromBytes(txBytes)
-		if err != nil {
-			return err
-		}
-		hash := crypto.Keccak256Hash(txBytes)
-		blockHash := block.Hash()
-		receipt, found := t.chain.FindTxReceiptByHash(blockHash, hash)
-		if !found {
-			receipt = nil
-		}
-		balanceChanges, found := t.chain.FindTxBalanceChangesByHash(blockHash, hash)
-		if !found {
-			balanceChanges = nil
-		}
-
-		tp := getTxType(tx)
-
-		var txw interface{}
-		if !includeEthTxHashes { // For backward compatibility, return the same tx struct as before
-			txw = Tx{
-				Tx:             tx,
-				Hash:           hash,
-				Type:           tp,
-				Receipt:        receipt,
-				BalanceChanges: balanceChanges,
+	/*
+		for _, txHash := range block.Txs {
+			// tx, err := stypes.TxFromBytes(txBytes)
+			// if err != nil {
+			// 	return err
+			// }
+			// hash := crypto.Keccak256Hash(txBytes)
+			blockHash := block.Hash()
+			receipt, found := t.chain.FindTxReceiptByHash(blockHash, txHash)
+			if !found {
+				receipt = nil
 			}
-		} else {
-			ethTxHash, _ := sbc.CalcEthTxHash(block, txBytes) // ignore error, since ethTxHash will be 0x000...000 if the function returns an error
-			txw = TxWithEthHash{
-				Tx:             tx,
-				Hash:           hash,
-				EthTxHash:      ethTxHash,
-				Type:           tp,
-				Receipt:        receipt,
-				BalanceChanges: balanceChanges,
+			balanceChanges, found := t.chain.FindTxBalanceChangesByHash(blockHash, txHash)
+			if !found {
+				balanceChanges = nil
 			}
+
+			tp := getTxType(tx)
+
+			var txw interface{}
+			if !includeEthTxHashes { // For backward compatibility, return the same tx struct as before
+				txw = Tx{
+					Tx:             tx,
+					Hash:           hash,
+					Type:           tp,
+					Receipt:        receipt,
+					BalanceChanges: balanceChanges,
+				}
+			} else {
+				ethTxHash, _ := sbc.CalcEthTxHash(block, txBytes) // ignore error, since ethTxHash will be 0x000...000 if the function returns an error
+				txw = TxWithEthHash{
+					Tx:             tx,
+					Hash:           hash,
+					EthTxHash:      ethTxHash,
+					Type:           tp,
+					Receipt:        receipt,
+					BalanceChanges: balanceChanges,
+				}
+			}
+
+			*txs = append(*txs, txw)
 		}
-
-		*txs = append(*txs, txw)
-	}
-
+	*/
+	*txs = append(*txs, block.Txs)
 	return nil
 }
 

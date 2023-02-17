@@ -107,8 +107,8 @@ func (t *ThetaRPCService) txCallback() {
 			logger.Infof("Processing finalized block, height=%v", block.Height)
 
 			for _, tx := range block.Txs {
-				txHash := crypto.Keccak256Hash(tx)
-				cb, ok := txCallbackManager.RemoveCallback(txHash)
+				// txHash := crypto.Keccak256Hash(tx)
+				cb, ok := txCallbackManager.RemoveCallback(tx)
 				if ok {
 					go cb.Callback(block)
 				}
@@ -122,6 +122,61 @@ func (t *ThetaRPCService) txCallback() {
 
 			logger.Debugf("Done txCallbackManager.Trim()")
 		}
+	}
+}
+
+// ------------------------------- SendSoleRawTransaction -----------------------------------
+
+type SendSoleRawTransactionArgs struct {
+	TxBytes string `json:"tx_bytes"`
+}
+
+type SendSoleRawTransactionResult struct {
+	TxHash string             `json:"hash"`
+	Block  *score.BlockHeader `json:"block",rlp:"nil"`
+}
+
+func (t *ThetaRPCService) SendSoleRawTransaction(
+	args *SendSoleRawTransactionArgs, result *SendSoleRawTransactionResult) (err error) {
+	txBytes, err := decodeTxHexBytes(args.TxBytes)
+	if err != nil {
+		return err
+	}
+
+	hash := crypto.Keccak256Hash(txBytes)
+	result.TxHash = hash.Hex()
+
+	logger.Infof("Prepare to broadcast raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+
+	err = t.mempool.InsertTransaction(txBytes)
+	if err == nil {
+		logger.Infof("Receive raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+	} else {
+		logger.Warnf("Failed to broadcast raw transaction (sync): %v, hash: %v, err: %v", hex.EncodeToString(txBytes), hash.Hex(), err)
+		return err
+	}
+
+	finalized := make(chan *score.Block)
+	timeout := time.NewTimer(txTimeout)
+	defer timeout.Stop()
+
+	txCallbackManager.AddCallback(hash, func(block *score.Block) {
+		select {
+		case finalized <- block:
+		default:
+		}
+	})
+
+	select {
+	case block := <-finalized:
+		if block == nil {
+			logger.Infof("Tx callback returns nil, txHash=%v", result.TxHash)
+			return errors.New("Internal server error")
+		}
+		result.Block = block.BlockHeader
+		return nil
+	case <-timeout.C:
+		return errors.New("Timed out waiting for transaction to be included")
 	}
 }
 
