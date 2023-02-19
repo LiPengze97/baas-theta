@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/thetatoken/theta/common"
 	"github.com/thetatoken/theta/ledger/types"
 	wtypes "github.com/thetatoken/theta/wallet/types"
@@ -96,32 +96,42 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 		utils.Error("Failed to encode transaction: %v\n", err)
 	}
 	signedTx := hex.EncodeToString(raw)
+	remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+	var wg sync.WaitGroup
 
-	client := rpcc.NewRPCClient(viper.GetString(utils.CfgRemoteRPCEndpoint))
+	for _, remoteRPCEndpoint := range remoteRPCEndpoints {
+		f := func(remoteRPCEndpoint string) {
+			defer wg.Done()
+			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 
-	var res *jsonrpc.RPCResponse
-	if asyncFlag {
-		res, err = client.Call("theta.BroadcastRawTransactionAsync", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
-	} else {
-		res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
-	}
+			var res *jsonrpc.RPCResponse
+			if asyncFlag {
+				res, err = client.Call("theta.BroadcastRawTransactionAsync", rpc.BroadcastRawTransactionArgs{TxBytes: signedTx})
+			} else {
+				res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
+			}
 
-	if err != nil {
-		utils.Error("Failed to send sole transaction: %v\n", err)
+			if err != nil {
+				utils.Error("Failed to send sole transaction: %v\n", err)
+			}
+			if res.Error != nil {
+				utils.Error("Server returned error: %v\n", res.Error)
+			}
+			result := &rpc.SendSoleRawTransactionResult{}
+			err = res.GetObject(result)
+			if err != nil {
+				utils.Error("Failed to parse server response: %v\n", err)
+			}
+			formatted, err := json.MarshalIndent(result, "", "    ")
+			if err != nil {
+				utils.Error("Failed to parse server response: %v\n", err)
+			}
+			fmt.Printf("Successfully send sole transaction:\n%s\n", formatted)
+		}
+		wg.Add(1)
+		go f(remoteRPCEndpoint)
 	}
-	if res.Error != nil {
-		utils.Error("Server returned error: %v\n", res.Error)
-	}
-	result := &rpc.SendSoleRawTransactionResult{}
-	err = res.GetObject(result)
-	if err != nil {
-		utils.Error("Failed to parse server response: %v\n", err)
-	}
-	formatted, err := json.MarshalIndent(result, "", "    ")
-	if err != nil {
-		utils.Error("Failed to parse server response: %v\n", err)
-	}
-	fmt.Printf("Successfully send sole transaction:\n%s\n", formatted)
+	wg.Wait()
 }
 
 /* broadcast version
