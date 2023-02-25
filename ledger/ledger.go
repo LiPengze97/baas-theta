@@ -341,7 +341,9 @@ func (ledger *Ledger) ApplyBlockTxs(block *score.Block) result.Result {
 		start := time.Now()
 		rawTx, success := ledger.mempool.GetRawTxBytes(hashTx.String())
 		if !success {
-			log.Panic("cannot find the raw Tx !")
+			logger.Info("cannot find the raw Tx !")
+			ledger.resetState(parentBlock)
+			return result.UndecidedWith(result.Info{"unfoundtx": rawTx})
 		}
 		blockRawTxs = append(blockRawTxs, rawTx)
 		tx, err := stypes.TxFromBytes(rawTx)

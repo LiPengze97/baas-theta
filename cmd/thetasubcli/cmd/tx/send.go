@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/thetatoken/theta/common"
@@ -96,12 +97,17 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 		utils.Error("Failed to encode transaction: %v\n", err)
 	}
 	signedTx := hex.EncodeToString(raw)
-	remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://127.0.0.1:16900/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc"}
 	var wg sync.WaitGroup
 
-	for _, remoteRPCEndpoint := range remoteRPCEndpoints {
+	for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
 		f := func(remoteRPCEndpoint string) {
 			defer wg.Done()
+			if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+				time.Sleep(time.Duration(3) * time.Second)
+			}
 			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 
 			var res *jsonrpc.RPCResponse
@@ -126,7 +132,7 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 			if err != nil {
 				utils.Error("Failed to parse server response: %v\n", err)
 			}
-			fmt.Printf("Successfully send sole transaction:\n%s\n", formatted)
+			fmt.Printf("Successfully send sole transaction to node %v:\n%s\n", idx+1, formatted)
 		}
 		wg.Add(1)
 		go f(remoteRPCEndpoint)

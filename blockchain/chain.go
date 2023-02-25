@@ -239,6 +239,22 @@ func (ch *Chain) MarkBlockInvalid(hash common.Hash) *score.ExtendedBlock {
 	return block
 }
 
+func (ch *Chain) MarkBlockUndecided(hash common.Hash) *score.ExtendedBlock {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+
+	block, err := ch.findBlock(hash)
+	if err != nil {
+		logger.Panic(err)
+	}
+	block.Status = score.BlockStatusUndecided
+	err = ch.saveBlock(block)
+	if err != nil {
+		logger.Panic(err)
+	}
+	return block
+}
+
 func (ch *Chain) MarkBlockHasValidatorUpdate(hash common.Hash) *score.ExtendedBlock {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()

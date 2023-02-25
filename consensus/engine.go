@@ -11,6 +11,7 @@ import (
 	"time"
 
 	// "github.com/thetatoken/theta/crypto/bls"
+	"container/list"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -56,6 +57,9 @@ type ConsensusEngine struct {
 	voteTimer  *time.Timer
 	epochTimer *time.Timer
 
+	// blockProcessedTime    map[*score.Block]time.Time
+	undecidedBlocksQueue *list.List
+
 	voteTimerReady bool
 	blockProcessed bool
 
@@ -83,6 +87,8 @@ func NewConsensusEngine(privateKey *crypto.PrivateKey, db store.Store, chain *sb
 
 		voteTimerReady: false,
 		blockProcessed: false,
+
+		undecidedBlocksQueue: list.New(),
 
 		// metachainWitness: metachainWitness,
 	}
@@ -267,6 +273,7 @@ func (e *ConsensusEngine) mainLoop() {
 					e.vote()
 				}
 			case <-e.epochTimer.C:
+				e.processUndecidedBlock()
 				e.logger.WithFields(log.Fields{"e.epoch": e.GetEpoch()}).Debug("Epoch timeout. Repeating epoch")
 				e.vote()
 				break Epoch
@@ -552,7 +559,7 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 	start := time.Now()
 
 	block := eb.Block
-	if !eb.Status.IsPending() {
+	if !eb.Status.IsPending() && !eb.Status.IsUndecided() {
 		// Before consensus engine can process the first one, sync layer might send duplicate blocks.
 		e.logger.WithFields(log.Fields{
 			"error":        nil,
@@ -605,7 +612,21 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 
 	start1 = time.Now()
 	result = e.ledger.ApplyBlockTxs(block)
-	if result.IsError() {
+	if result.IsUndecided() {
+		e.logger.WithFields(log.Fields{
+			"warning":         result.String(),
+			"parent":          block.Parent.Hex(),
+			"block":           block.Hash().Hex(),
+			"block.StateHash": block.StateHash.Hex(),
+		}).Warn("Not ready to apply block Txs")
+		e.chain.MarkBlockUndecided(block.Hash())
+		e.undecidedBlocksQueue.PushBack(block)
+		return // If the mainchain node falls out-of-sync, the subchain node might not have evidence to
+		// either confirm or reject the ValidatorSetUpdateTx. In such a case, the the processing result of
+		// a normal block could be undecided. Hence, we should NOT mark the block as invalid. Instead, we
+		// should keep the block in the "Pending" state, Later after the mainchain node is in-sync, this
+		// block could be re-processed.
+	} else if result.IsError() {
 		e.logger.WithFields(log.Fields{
 			"error":           result.String(),
 			"parent":          block.Parent.Hex(),
@@ -614,18 +635,9 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 		}).Error("Failed to apply block Txs")
 		e.chain.MarkBlockInvalid(block.Hash())
 		return
-	} else if result.IsUndecided() {
-		e.logger.WithFields(log.Fields{
-			"warning":         result.String(),
-			"parent":          block.Parent.Hex(),
-			"block":           block.Hash().Hex(),
-			"block.StateHash": block.StateHash.Hex(),
-		}).Warn("Not ready to apply block Txs")
-		return // If the mainchain node falls out-of-sync, the subchain node might not have evidence to
-		// either confirm or reject the ValidatorSetUpdateTx. In such a case, the the processing result of
-		// a normal block could be undecided. Hence, we should NOT mark the block as invalid. Instead, we
-		// should keep the block in the "Pending" state, Later after the mainchain node is in-sync, this
-		// block could be re-processed.
+	}
+	if e.undecidedBlocksQueue.Len() != 0 && e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash() == block.Hash() {
+		e.undecidedBlocksQueue.Remove(e.undecidedBlocksQueue.Front())
 	}
 	applyBlockTime := time.Since(start1)
 
@@ -669,6 +681,12 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 		"applyBlockTime":    applyBlockTime,
 		"pruneStateTime":    pruneStateTime,
 	}).Debug("Finish processing block")
+}
+
+func (e *ConsensusEngine) processUndecidedBlock() {
+	if e.undecidedBlocksQueue.Len() != 0 {
+		e.AddMessage(e.undecidedBlocksQueue.Front().Value)
+	}
 }
 
 func (e *ConsensusEngine) shouldVote(block common.Hash) bool {
@@ -854,9 +872,9 @@ func (e *ConsensusEngine) checkCC(hash common.Hash) {
 		e.processCCBlock(block)
 		return
 	}
-	// Ignore outdated votes.
+	// Ignore outdated votes unless it is a undecied block.
 	highestCCBlockHeight := e.state.GetHighestCCBlock().Height
-	if block.Height < highestCCBlockHeight {
+	if block.Height < highestCCBlockHeight && !block.Status.IsUndecided() {
 		return
 	}
 

@@ -1,12 +1,13 @@
 # Theta configuration
 # chainID: private_multinode_subchain
 genesis:
-  hash: "0x527b5ef27a3c85316a072dcdcea84d14d38e8dfc9bb5becce713c89cd95ffa42"
+  hash: "0xbe7123d5923054d4bfb17e5eaffc150d29bf7b1d60359fa0d8fd5e281fdc5462"
 p2p:
   port: 12100
   seeds: 127.0.0.1:11100,127.0.0.1:13000,127.0.0.1:14000
   seedPeerOnlyOutbound: true
 rpc:
+  port: 16910
   enabled: true
 log:
   #levels: "*:info"

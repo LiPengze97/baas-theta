@@ -44,7 +44,7 @@ func (b *Block) String() string {
 	for _, tx := range b.Txs {
 		txs = append(txs, tx.String())
 	}
-	return fmt.Sprintf("Block{Header: %v, Txs: %v, coinbase: %v}", b.BlockHeader, txs)
+	return fmt.Sprintf("Block{Header: %v, Txs: %v}", b.BlockHeader, txs)
 }
 
 var _ rlp.Encoder = (*Block)(nil)
@@ -311,13 +311,18 @@ type BlockStatus byte
 /*
 Block status transitions:
 
-+-------+          +-------+                          +-------------------+
-|Pending+---+------>Invalid|                    +----->IndirectlyFinalized|
-+-------+   |      +-------+                    |     +-------------------+
-            |                                   |
-            |      +-----+        +---------+   |     +-----------------+
-            +------>Valid+-------->Committed+---+----->DirectlyFinalized|
-                   +-----+        +---------+         +-----------------+
++-------+           +-------+                          +-------------------+
+|Pending+---+------->Invalid|                    +----->IndirectlyFinalized|
++-------+   |       +-------+                    |     +-------------------+
+            |                                    |
+            |       +-----+        +---------+   |     +-----------------+
+            +---+--->Valid+-------->Committed+---+----->DirectlyFinalized|
+            |  |    +-----+        +---------+         +-----------------+
+			|  |
+			|  +-------------------+
+        	|       +---------+	   |
+			+------->Undecided+----+
+			|       +---------+
 
 */
 const (
@@ -329,6 +334,7 @@ const (
 	BlockStatusIndirectlyFinalized
 	BlockStatusTrusted
 	BlockStatusDisposed
+	BlockStatusUndecided
 )
 
 func (bs BlockStatus) IsPending() bool {
@@ -354,6 +360,10 @@ func (bs BlockStatus) IsIndirectlyFinalized() bool {
 
 func (bs BlockStatus) IsTrusted() bool {
 	return bs == BlockStatusTrusted
+}
+
+func (bs BlockStatus) IsUndecided() bool {
+	return bs == BlockStatusUndecided
 }
 
 func (bs BlockStatus) IsInvalid() bool {

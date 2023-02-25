@@ -101,26 +101,30 @@ func (m *RotatingValidatorManager) getProposerFromValidators(valSet *score.Valid
 		log.Panic("No validators have been added")
 	}
 
-	totalStake := valSet.TotalStake()
-	scalingFactor := new(big.Int).Div(totalStake, common.BigMaxUint32)
-	scalingFactor = new(big.Int).Add(scalingFactor, common.Big1)
-	scaledTotalStake := scaleDown(totalStake, scalingFactor)
+	return valSet.Validators()[0]
+	/*
+			totalStake := valSet.TotalStake()
+			scalingFactor := new(big.Int).Div(totalStake, common.BigMaxUint32)
+			scalingFactor = new(big.Int).Add(scalingFactor, common.Big1)
+			scaledTotalStake := scaleDown(totalStake, scalingFactor)
 
-	// TODO: replace with more secure randomness.
-	rnd := rand.New(rand.NewSource(int64(epoch)))
-	r := randUint64(rnd, scaledTotalStake)
-	curr := uint64(0)
-	validators := valSet.Validators()
-	for _, v := range validators {
-		curr += scaleDown(v.Stake, scalingFactor)
-		if r < curr {
-			return v
-		}
-	}
+			// TODO: replace with more secure randomness.
+			rnd := rand.New(rand.NewSource(int64(epoch)))
+			r := randUint64(rnd, scaledTotalStake)
+			curr := uint64(0)
+			validators := valSet.Validators()
+			for _, v := range validators {
+				curr += scaleDown(v.Stake, scalingFactor)
+				if r < curr {
+					return v
+				}
+			}
 
-	// Should not reach here.
-	log.Panic("Failed to randomly select a validator")
-	panic("Should not reach here")
+
+		// Should not reach here.
+		log.Panic("Failed to randomly select a validator")
+		panic("Should not reach here")
+	*/
 }
 
 // GetValidatorSet returns the validator set for given block.

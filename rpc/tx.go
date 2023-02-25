@@ -146,7 +146,7 @@ func (t *ThetaRPCService) SendSoleRawTransaction(
 	hash := crypto.Keccak256Hash(txBytes)
 	result.TxHash = hash.Hex()
 
-	logger.Infof("Prepare to broadcast raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+	logger.Infof("Sole Prepare to broadcast raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
 
 	err = t.mempool.InsertTransaction(txBytes)
 	if err == nil {
