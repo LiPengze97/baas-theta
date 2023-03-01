@@ -290,12 +290,12 @@ func (e *ConsensusEngine) enterEpoch() {
 	if e.epochTimer != nil {
 		e.epochTimer.Stop()
 	}
-	e.epochTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMaxEpochLength)) * time.Second)
+	e.epochTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMaxEpochLength)) * time.Millisecond)
 
 	if e.voteTimer != nil {
 		e.voteTimer.Stop()
 	}
-	e.voteTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) * time.Second)
+	e.voteTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) * time.Millisecond)
 
 	e.voteTimerReady = false
 	e.blockProcessed = false

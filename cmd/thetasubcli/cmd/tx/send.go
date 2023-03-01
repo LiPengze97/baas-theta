@@ -32,6 +32,13 @@ var sendCmd = &cobra.Command{
 	Run:     doSendCmd,
 }
 
+var autoSendCmd = &cobra.Command{
+	Use:     "autosend",
+	Short:   "Send tokens",
+	Example: `thetasubcli tx send --chain="privatenet" --from=2E833968E5bB786Ae419c4d13189fB081Cc43bab --to=9F1233798E905E173560071255140b4A8aBd3Ec6 --tfuel=9 --seq=1`,
+	Run:     doAutoSendCmd,
+}
+
 func doSendCmd(cmd *cobra.Command, args []string) {
 	walletType := getWalletType(cmd)
 	if walletType == wtypes.WalletTypeSoft && len(fromFlag) == 0 {
@@ -138,6 +145,102 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 		go f(remoteRPCEndpoint)
 	}
 	wg.Wait()
+}
+
+func doAutoSendCmd(cmd *cobra.Command, args []string) {
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+
+	var wg sync.WaitGroup
+
+	wallet, fromAddress, err := walletUnlockWithPath(cmd, fromFlag, pathFlag, passwordFlag)
+	if err != nil || wallet == nil {
+		return
+	}
+	defer wallet.Lock(fromAddress)
+	tfuel, ok := types.ParseCoinAmount("1")
+	if !ok {
+		utils.Error("Failed to parse tfuel amount")
+	}
+	fee, ok := types.ParseCoinAmount(feeFlag)
+	if !ok {
+		utils.Error("Failed to parse fee")
+	}
+	outputs := []types.TxOutput{{
+		Address: common.HexToAddress(toFlag),
+		Coins: types.Coins{
+			TFuelWei: tfuel,
+			ThetaWei: new(big.Int).SetUint64(0),
+		},
+	}}
+	for i := 1; i <= 10; i++ {
+		inputs := []types.TxInput{{
+			Address: fromAddress,
+			Coins: types.Coins{
+				TFuelWei: new(big.Int).Add(tfuel, fee),
+				ThetaWei: new(big.Int).SetUint64(0),
+			},
+			Sequence: uint64(i),
+		}}
+		sendTx := &types.SendTx{
+			Fee: types.Coins{
+				ThetaWei: new(big.Int).SetUint64(0),
+				TFuelWei: fee,
+			},
+			Inputs:  inputs,
+			Outputs: outputs,
+		}
+		sig, err := wallet.Sign(fromAddress, sendTx.SignBytes(chainIDFlag))
+		if err != nil {
+			utils.Error("Failed to sign transaction: %v\n", err)
+		}
+		sendTx.SetSignature(fromAddress, sig)
+		raw, err := stypes.TxToBytes(sendTx)
+		if err != nil {
+			utils.Error("Failed to encode transaction: %v\n", err)
+		}
+		signedTx := hex.EncodeToString(raw)
+		for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
+			f := func(remoteRPCEndpoint string, index int) {
+				defer wg.Done()
+				if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+					time.Sleep(time.Duration(1) * time.Second)
+				}
+				client := rpcc.NewRPCClient(remoteRPCEndpoint)
+
+				var res *jsonrpc.RPCResponse
+				res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
+
+				if err != nil {
+					utils.Error("Failed to send sole transaction: %v\n", err)
+				}
+				if res.Error != nil {
+					utils.Error("Server returned error: %v\n", res.Error)
+				}
+				result := &rpc.SendSoleRawTransactionResult{}
+				err = res.GetObject(result)
+				if err != nil {
+					utils.Error("Failed to parse server response: %v\n", err)
+				}
+				formatted, err := json.MarshalIndent(result, "", "    ")
+				if err != nil {
+					utils.Error("Failed to parse server response: %v\n", err)
+				}
+				fmt.Printf("Successfully send sole transaction #%v to node %v\n", i, index+1)
+				if index == 0 {
+					fmt.Printf("%s", formatted)
+				}
+			}
+			wg.Add(1)
+			// time.Sleep(time.Duration(1000) * time.Millisecond)
+			go f(remoteRPCEndpoint, idx)
+		}
+		wg.Wait()
+	}
+
+	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+
+	// remoteRPCEndpoints := []string{"http://127.0.0.1:16900/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc"}
+
 }
 
 /* broadcast version
@@ -252,4 +355,15 @@ func init() {
 	//sendCmd.MarkFlagRequired("from")
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("seq")
+
+	autoSendCmd.Flags().StringVar(&chainIDFlag, "chain", "", "Chain ID")
+	autoSendCmd.Flags().StringVar(&fromFlag, "from", "", "Address to send from")
+	autoSendCmd.Flags().StringVar(&toFlag, "to", "", "Address to send to")
+	autoSendCmd.Flags().StringVar(&pathFlag, "path", "", "Wallet derivation path")
+	autoSendCmd.Flags().Uint64Var(&seqFlag, "seq", 0, "Sequence number of the transaction")
+	autoSendCmd.Flags().StringVar(&tfuelAmountFlag, "tfuel", "0", "TFuel amount")
+	autoSendCmd.Flags().StringVar(&feeFlag, "fee", fmt.Sprintf("%dwei", types.MinimumTransactionFeeTFuelWeiJune2021), "Fee")
+	autoSendCmd.Flags().StringVar(&walletFlag, "wallet", "soft", "Wallet type (soft|nano|trezor)")
+	autoSendCmd.Flags().BoolVar(&asyncFlag, "async", false, "block until tx has been included in the blockchain")
+	autoSendCmd.Flags().StringVar(&passwordFlag, "password", "", "password to unlock the wallet")
 }

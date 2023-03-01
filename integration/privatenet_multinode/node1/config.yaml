@@ -6,6 +6,9 @@ p2p:
   port: 11100
   seeds: 127.0.0.1:12100,127.0.0.1:13000,127.0.0.1:14000
   seedPeerOnlyOutbound: true
+consensus:
+  minBlockInterval: 500
+  maxEpochLength: 1000
 rpc:
   port: 16900
   enabled: true

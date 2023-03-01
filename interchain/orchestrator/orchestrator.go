@@ -648,7 +648,7 @@ func (oc *Orchestrator) getRetryThreshold(chainID *big.Int) time.Duration {
 		blockIntervalInSeconds = viper.GetInt(scom.CfgConsensusMinBlockInterval)
 	}
 	numBlocks := 4 // typically a tx should be finalized within 2 block intervals, here we conservatively use 4
-	retryThreshold := time.Duration(numBlocks*blockIntervalInSeconds) * time.Second
+	retryThreshold := time.Duration(numBlocks*blockIntervalInSeconds) * time.Microsecond
 	return retryThreshold
 }
 

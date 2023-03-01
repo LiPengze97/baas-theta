@@ -47,5 +47,6 @@ var TxCmd = &cobra.Command{
 
 func init() {
 	TxCmd.AddCommand(sendCmd)
+	TxCmd.AddCommand(autoSendCmd)
 	TxCmd.AddCommand(smartContractCmd)
 }

@@ -9,6 +9,9 @@ p2p:
 rpc:
   port: 16920
   enabled: true
+consensus:
+  minBlockInterval: 500
+  maxEpochLength: 1000
 log:
   #levels: "*:info"
   levels: "*:debug"

@@ -101,7 +101,7 @@ func (m *RotatingValidatorManager) getProposerFromValidators(valSet *score.Valid
 		log.Panic("No validators have been added")
 	}
 
-	return valSet.Validators()[0]
+	return valSet.Validators()[1]
 	/*
 			totalStake := valSet.TotalStake()
 			scalingFactor := new(big.Int).Div(totalStake, common.BigMaxUint32)
