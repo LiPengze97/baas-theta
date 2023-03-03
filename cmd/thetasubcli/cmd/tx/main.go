@@ -36,6 +36,9 @@ var (
 	beneficiaryFlag              string
 	splitBasisPointFlag          uint64
 	passwordFlag                 string
+
+	sendTotalNumFlag   uint64
+	sendIntervalMsFlag uint64
 )
 
 // TxCmd represents the Tx command
@@ -48,5 +51,6 @@ var TxCmd = &cobra.Command{
 func init() {
 	TxCmd.AddCommand(sendCmd)
 	TxCmd.AddCommand(autoSendCmd)
+	TxCmd.AddCommand(autoQueueSendCmd)
 	TxCmd.AddCommand(smartContractCmd)
 }

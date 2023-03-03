@@ -151,33 +151,36 @@ func (t *ThetaRPCService) SendSoleRawTransaction(
 	err = t.mempool.InsertTransaction(txBytes)
 	if err == nil {
 		logger.Infof("Receive raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+		return nil
 	} else {
 		logger.Warnf("Failed to broadcast raw transaction (sync): %v, hash: %v, err: %v", hex.EncodeToString(txBytes), hash.Hex(), err)
 		return err
 	}
 
-	finalized := make(chan *score.Block)
-	timeout := time.NewTimer(txTimeout)
-	defer timeout.Stop()
+	/*
+		finalized := make(chan *score.Block)
+		timeout := time.NewTimer(txTimeout)
+		defer timeout.Stop()
 
-	txCallbackManager.AddCallback(hash, func(block *score.Block) {
+		txCallbackManager.AddCallback(hash, func(block *score.Block) {
+			select {
+			case finalized <- block:
+			default:
+			}
+		})
+
 		select {
-		case finalized <- block:
-		default:
+		case block := <-finalized:
+			if block == nil {
+				logger.Infof("Tx callback returns nil, txHash=%v", result.TxHash)
+				return errors.New("Internal server error")
+			}
+			result.Block = block.BlockHeader
+			return nil
+		case <-timeout.C:
+			return errors.New("Timed out waiting for transaction to be included")
 		}
-	})
-
-	select {
-	case block := <-finalized:
-		if block == nil {
-			logger.Infof("Tx callback returns nil, txHash=%v", result.TxHash)
-			return errors.New("Internal server error")
-		}
-		result.Block = block.BlockHeader
-		return nil
-	case <-timeout.C:
-		return errors.New("Timed out waiting for transaction to be included")
-	}
+	*/
 }
 
 // ------------------------------- BroadcastRawTransaction -----------------------------------

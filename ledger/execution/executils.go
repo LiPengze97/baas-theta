@@ -190,13 +190,15 @@ func validateInputsAdvanced(accounts map[string]*types.Account, signBytes []byte
 
 func validateInputAdvanced(acc *types.Account, signBytes []byte, in types.TxInput, blockHeight uint64) result.Result {
 	// Check sequence/coins
+	/* baas comment off sequnce check
 	seq, balance := acc.Sequence, acc.Balance
 	if seq+1 != in.Sequence {
 		return result.Error("ValidateInputAdvanced: Got %v, expected %v. (acc.seq=%v)",
 			in.Sequence, seq+1, acc.Sequence).WithErrorCode(result.CodeInvalidSequence)
-	}
+	}*/
 
 	// Check amount
+	balance := acc.Balance
 	if !balance.IsGTE(in.Coins) {
 		return result.Error("Insufficient fund: balance is %v, tried to send %v",
 			balance, in.Coins).WithErrorCode(result.CodeInsufficientFund)
@@ -246,7 +248,7 @@ func adjustByInputs(view *slst.StoreView, accounts map[string]*types.Account, in
 		if !acc.Balance.IsGTE(in.Coins) {
 			panic("adjustByInputs() expects sufficient funds")
 		}
-		acc.Balance = acc.Balance.Minus(in.Coins)
+		// acc.Balance = acc.Balance.Minus(in.Coins)
 		acc.Sequence++
 		view.SetAccount(in.Address, acc)
 	}
@@ -258,7 +260,7 @@ func adjustByOutputs(view *slst.StoreView, accounts map[string]*types.Account, o
 		if acc == nil {
 			panic("adjustByOutputs() expects account in accounts")
 		}
-		acc.Balance = acc.Balance.Plus(out.Coins)
+		// acc.Balance = acc.Balance.Plus(out.Coins)
 		view.SetAccount(out.Address, acc)
 	}
 }

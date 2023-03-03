@@ -39,6 +39,13 @@ var autoSendCmd = &cobra.Command{
 	Run:     doAutoSendCmd,
 }
 
+var autoQueueSendCmd = &cobra.Command{
+	Use:     "autoqueue",
+	Short:   "Send tokens",
+	Example: `thetasubcli tx send --chain="privatenet" --from=2E833968E5bB786Ae419c4d13189fB081Cc43bab --to=9F1233798E905E173560071255140b4A8aBd3Ec6 --tfuel=9 --seq=1`,
+	Run:     doAutoQueueSendCmd,
+}
+
 func doSendCmd(cmd *cobra.Command, args []string) {
 	walletType := getWalletType(cmd)
 	if walletType == wtypes.WalletTypeSoft && len(fromFlag) == 0 {
@@ -112,9 +119,9 @@ func doSendCmd(cmd *cobra.Command, args []string) {
 	for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
 		f := func(remoteRPCEndpoint string) {
 			defer wg.Done()
-			if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
-				time.Sleep(time.Duration(3) * time.Second)
-			}
+			// if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+			// 	time.Sleep(time.Duration(3) * time.Second)
+			// }
 			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 
 			var res *jsonrpc.RPCResponse
@@ -236,6 +243,119 @@ func doAutoSendCmd(cmd *cobra.Command, args []string) {
 		}
 		wg.Wait()
 	}
+
+	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+
+	// remoteRPCEndpoints := []string{"http://127.0.0.1:16900/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc"}
+
+}
+
+func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
+
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+
+	var wg sync.WaitGroup
+
+	wallet, fromAddress, err := walletUnlockWithPath(cmd, fromFlag, pathFlag, passwordFlag)
+	if err != nil || wallet == nil {
+		return
+	}
+	defer wallet.Lock(fromAddress)
+	tfuel, ok := types.ParseCoinAmount("1")
+	if !ok {
+		utils.Error("Failed to parse tfuel amount")
+	}
+	fee, ok := types.ParseCoinAmount(feeFlag)
+	if !ok {
+		utils.Error("Failed to parse fee")
+	}
+	outputs := []types.TxOutput{{
+		Address: common.HexToAddress(toFlag),
+		Coins: types.Coins{
+			TFuelWei: tfuel,
+			ThetaWei: new(big.Int).SetUint64(0),
+		},
+	}}
+	txToSend := []string{}
+	// s1 := time.Now()
+	for i := 1; i <= int(sendTotalNumFlag); i++ {
+		inputs := []types.TxInput{{
+			Address: fromAddress,
+			Coins: types.Coins{
+				TFuelWei: new(big.Int).Add(tfuel, fee),
+				ThetaWei: new(big.Int).SetUint64(0),
+			},
+			Sequence: uint64(i),
+		}}
+		sendTx := &types.SendTx{
+			Fee: types.Coins{
+				ThetaWei: new(big.Int).SetUint64(0),
+				TFuelWei: fee,
+			},
+			Inputs:  inputs,
+			Outputs: outputs,
+		}
+		sig, err := wallet.Sign(fromAddress, sendTx.SignBytes(chainIDFlag))
+		if err != nil {
+			utils.Error("Failed to sign transaction: %v\n", err)
+		}
+		sendTx.SetSignature(fromAddress, sig)
+		raw, err := stypes.TxToBytes(sendTx)
+		if err != nil {
+			utils.Error("Failed to encode transaction: %v\n", err)
+		}
+		signedTx := hex.EncodeToString(raw)
+		txToSend = append(txToSend, signedTx)
+	}
+	// fmt.Println("total time", time.Since(s1))
+
+	for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
+		f := func(remoteRPCEndpoint string, index int) {
+			defer wg.Done()
+			if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+				time.Sleep(time.Duration(100) * time.Millisecond)
+			}
+			client := rpcc.NewRPCClient(remoteRPCEndpoint)
+			for tx_idx, signedTx := range txToSend {
+				var res *jsonrpc.RPCResponse
+				res, err = client.Call("theta.SendSoleRawTransaction", rpc.SendSoleRawTransactionArgs{TxBytes: signedTx})
+
+				if err != nil {
+					utils.Error("Failed to send sole transaction: %v\n", err)
+				}
+				if res.Error != nil {
+					utils.Error("Server returned error: %v\n", res.Error)
+				}
+				_ = &rpc.SendSoleRawTransactionResult{}
+				/*
+					result := &rpc.SendSoleRawTransactionResult{}
+					err = res.GetObject(result)
+					if err != nil {
+						utils.Error("Failed to parse server response: %v\n", err)
+					}
+					// formatted, err := json.MarshalIndent(result, "", "    ")
+					// if err != nil {
+					// 	utils.Error("Failed to parse server response: %v\n", err)
+					// }
+					if (tx_idx+1)%10 == 0 {
+						fmt.Printf("Successfully send sole transaction #%v to node %v\n", tx_idx, index+1)
+					}
+
+					// if index == 0 {
+					// 	fmt.Printf("%s", formatted)
+					// }
+				*/
+				if (tx_idx+1)%10 == 0 {
+					fmt.Printf("Successfully send sole transaction #%v to node %v\n", tx_idx, index+1)
+				}
+				time.Sleep(time.Duration(sendIntervalMsFlag) * time.Millisecond)
+			}
+		}
+		wg.Add(1)
+		// time.Sleep(time.Duration(1000) * time.Millisecond)
+		go f(remoteRPCEndpoint, idx)
+	}
+	wg.Wait()
 
 	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
 
@@ -366,4 +486,17 @@ func init() {
 	autoSendCmd.Flags().StringVar(&walletFlag, "wallet", "soft", "Wallet type (soft|nano|trezor)")
 	autoSendCmd.Flags().BoolVar(&asyncFlag, "async", false, "block until tx has been included in the blockchain")
 	autoSendCmd.Flags().StringVar(&passwordFlag, "password", "", "password to unlock the wallet")
+
+	autoQueueSendCmd.Flags().StringVar(&chainIDFlag, "chain", "", "Chain ID")
+	autoQueueSendCmd.Flags().StringVar(&fromFlag, "from", "", "Address to send from")
+	autoQueueSendCmd.Flags().StringVar(&toFlag, "to", "", "Address to send to")
+	autoQueueSendCmd.Flags().StringVar(&pathFlag, "path", "", "Wallet derivation path")
+	autoQueueSendCmd.Flags().Uint64Var(&seqFlag, "seq", 0, "Sequence number of the transaction")
+	autoQueueSendCmd.Flags().StringVar(&tfuelAmountFlag, "tfuel", "0", "TFuel amount")
+	autoQueueSendCmd.Flags().StringVar(&feeFlag, "fee", fmt.Sprintf("%dwei", types.MinimumTransactionFeeTFuelWeiJune2021), "Fee")
+	autoQueueSendCmd.Flags().StringVar(&walletFlag, "wallet", "soft", "Wallet type (soft|nano|trezor)")
+	autoQueueSendCmd.Flags().BoolVar(&asyncFlag, "async", false, "block until tx has been included in the blockchain")
+	autoQueueSendCmd.Flags().StringVar(&passwordFlag, "password", "", "password to unlock the wallet")
+	autoQueueSendCmd.Flags().Uint64Var(&sendTotalNumFlag, "num", 1000, "total number of message")
+	autoQueueSendCmd.Flags().Uint64Var(&sendIntervalMsFlag, "interval", 1000, "sending rate")
 }
