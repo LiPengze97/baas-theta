@@ -503,8 +503,12 @@ func (e *ConsensusEngine) handleBlock(block *score.Block) {
 		e.handleHardcodeBlock(common.HexToHash(hex))
 	} else {
 		if e.checkStateRootForBlock(block) {
+			e.mu.Lock()
+			defer e.mu.Unlock()
 			e.chain.MarkBlockUndecided(block.Hash())
 			e.undecidedBlocksQueue.PushBack(block)
+			e.showQueueContent()
+			return
 		}
 		e.handleNormalBlock(eb)
 	}
@@ -561,12 +565,28 @@ func (e *ConsensusEngine) handleHardcodeBlock(hash common.Hash) {
 
 // when the undecided block has not been commited, the next block will cause miss trie node bug
 func (e *ConsensusEngine) checkStateRootForBlock(block *score.Block) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	// return true if there is undecided block unprocessed
+	if e.isInQueue(block) {
+		e.logger.Debugf("Block %v has already in queue", block.Hash().Hex())
+		return false
+	}
 	if e.undecidedBlocksQueue.Len() == 0 {
 		return false
 	}
 	for i := e.undecidedBlocksQueue.Front(); i != nil; i = i.Next() {
 		if i.Value.(*score.Block).Hash() == block.Parent {
+			return true
+		}
+	}
+	return false
+}
+
+// if the block has been added to queue, ignore it
+func (e *ConsensusEngine) isInQueue(block *score.Block) bool {
+	for i := e.undecidedBlocksQueue.Front(); i != nil; i = i.Next() {
+		if i.Value.(*score.Block).Hash().Hex() == block.Hash().Hex() {
 			return true
 		}
 	}
@@ -594,6 +614,13 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 			"parent": block.Parent.Hex(),
 			"block":  block.Hash().Hex(),
 		}).Fatal("Failed to find parent block")
+	}
+
+	if parent.Status == score.BlockStatusUndecided {
+		e.logger.WithFields(log.Fields{
+			"block.Status": eb.Status,
+			"block":        block.Hash().Hex(),
+		}).Debug("Parent block is still undecided")
 	}
 
 	start1 := time.Now()
@@ -636,9 +663,15 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 			"parent":          block.Parent.Hex(),
 			"block":           block.Hash().Hex(),
 			"block.StateHash": block.StateHash.Hex(),
-		}).Warn("Not ready to apply block Txs")
-		e.chain.MarkBlockUndecided(block.Hash())
-		e.undecidedBlocksQueue.PushBack(block)
+		}).Warn("Not ready to apply block Txs, mark it as undecided")
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if e.isInQueue(block) {
+			e.logger.Debugf("Block %v has already in queue", block.Hash().Hex())
+		} else {
+			e.chain.MarkBlockUndecided(block.Hash())
+			e.undecidedBlocksQueue.PushBack(block)
+		}
 		return // If the mainchain node falls out-of-sync, the subchain node might not have evidence to
 		// either confirm or reject the ValidatorSetUpdateTx. In such a case, the the processing result of
 		// a normal block could be undecided. Hence, we should NOT mark the block as invalid. Instead, we
@@ -655,6 +688,12 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 		return
 	}
 	if e.undecidedBlocksQueue.Len() != 0 && e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash() == block.Hash() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.logger.WithFields(log.Fields{
+			"block":           block.Hash().Hex(),
+			"block.StateHash": block.StateHash.Hex(),
+		}).Info("undecided block is valid now")
 		e.undecidedBlocksQueue.Remove(e.undecidedBlocksQueue.Front())
 	}
 	applyBlockTime := time.Since(start1)
@@ -702,6 +741,8 @@ func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
 }
 
 func (e *ConsensusEngine) processUndecidedBlock() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.undecidedBlocksQueue.Len() != 0 {
 		e.AddMessage(e.undecidedBlocksQueue.Front().Value)
 	}
@@ -719,6 +760,10 @@ func (e *ConsensusEngine) shouldVoteByID(id common.Address, block common.Hash) b
 
 func (e *ConsensusEngine) vote() {
 	tip := e.GetTipToVote()
+
+	if tip.Status.IsUndecided() {
+		e.logger.Debugf("Tip %v is undecided, we cannot vote", tip.Block.Hash().Hex())
+	}
 
 	if !e.shouldVote(tip.Hash()) {
 		return
@@ -753,6 +798,9 @@ func (e *ConsensusEngine) vote() {
 			log.Panic(err)
 		}
 		// Recreating vote so that it has updated epoch and signature.
+		if block.Status.IsUndecided() {
+			e.logger.Debugf("Repeating block %v is undecided, we cannot vote", block.Block.Hash().Hex())
+		}
 		vote = e.createVote(block.Block)
 	} else {
 		vote = e.createVote(tip.Block)
@@ -864,6 +912,17 @@ func (e *ConsensusEngine) handleVote(vote score.Vote) (endEpoch bool) {
 	return
 }
 
+func (e *ConsensusEngine) showQueueContent() {
+	if e.undecidedBlocksQueue.Len() == 0 {
+		e.logger.Debug("Empty Queue")
+	} else {
+		e.logger.Debugf("We have %v blocks", e.undecidedBlocksQueue.Len())
+		for i := e.undecidedBlocksQueue.Front(); i != nil; i = i.Next() {
+			e.logger.Debugf("Hash.hex:%v", i.Value.(*score.Block).Hash().Hex())
+		}
+	}
+}
+
 func (e *ConsensusEngine) checkCC(hash common.Hash) {
 	if hash.IsEmpty() {
 		return
@@ -872,6 +931,17 @@ func (e *ConsensusEngine) checkCC(hash common.Hash) {
 	if err != nil {
 		e.logger.WithFields(log.Fields{"block": hash.Hex()}).Debug("checkCC: Block hash in vote is not found")
 		return
+	}
+	// Skip the undecided block that is not the first
+	if block.Status.IsUndecided() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.logger.Debugf("checking cc, I am undecided : %v", hash.Hex())
+		e.showQueueContent()
+		if e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash().Hex() != hash.Hex() {
+			e.logger.WithFields(log.Fields{"block": hash.Hex()}).Debug("your ancestor undecided block has not been processed!")
+			return
+		}
 	}
 	// Skip invalid block.
 	if block.Status.IsInvalid() {
