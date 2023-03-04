@@ -252,7 +252,8 @@ func doAutoSendCmd(cmd *cobra.Command, args []string) {
 
 func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 
-	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
 
 	var wg sync.WaitGroup
 
@@ -304,6 +305,8 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 		if err != nil {
 			utils.Error("Failed to encode transaction: %v\n", err)
 		}
+		fmt.Println("raw Tx size: ", len(raw))
+		// hash := crypto.Keccak256Hash(raw)
 		signedTx := hex.EncodeToString(raw)
 		txToSend = append(txToSend, signedTx)
 	}
@@ -312,9 +315,9 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 	for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
 		f := func(remoteRPCEndpoint string, index int) {
 			defer wg.Done()
-			if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
-				time.Sleep(time.Duration(100) * time.Millisecond)
-			}
+			// if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+			// 	time.Sleep(time.Duration(300) * time.Millisecond)
+			// }
 			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 			for tx_idx, signedTx := range txToSend {
 				var res *jsonrpc.RPCResponse

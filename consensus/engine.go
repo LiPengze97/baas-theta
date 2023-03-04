@@ -318,7 +318,7 @@ func (e *ConsensusEngine) AddMessage(msg interface{}) {
 func (e *ConsensusEngine) processMessage(msg interface{}) (endEpoch bool) {
 	switch m := msg.(type) {
 	case score.Vote:
-		e.logger.WithFields(log.Fields{"vote": m}).Debug("Received vote")
+		// e.logger.WithFields(log.Fields{"vote": m}).Debug("Received vote")
 		endEpoch = e.handleVote(m)
 		e.checkCC(m.Block)
 		return endEpoch
@@ -502,6 +502,10 @@ func (e *ConsensusEngine) handleBlock(block *score.Block) {
 	if hex, ok := score.HardcodeBlockHashes[eb.Height]; ok {
 		e.handleHardcodeBlock(common.HexToHash(hex))
 	} else {
+		if e.checkStateRootForBlock(block) {
+			e.chain.MarkBlockUndecided(block.Hash())
+			e.undecidedBlocksQueue.PushBack(block)
+		}
 		e.handleNormalBlock(eb)
 	}
 }
@@ -553,6 +557,20 @@ func (e *ConsensusEngine) handleHardcodeBlock(hash common.Hash) {
 	e.pruneState(block.Height)
 
 	e.state.SetHighestCCBlock(eb)
+}
+
+// when the undecided block has not been commited, the next block will cause miss trie node bug
+func (e *ConsensusEngine) checkStateRootForBlock(block *score.Block) bool {
+	// return true if there is undecided block unprocessed
+	if e.undecidedBlocksQueue.Len() == 0 {
+		return false
+	}
+	for i := e.undecidedBlocksQueue.Front(); i != nil; i = i.Next() {
+		if i.Value.(*score.Block).Hash() == block.Parent {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *ConsensusEngine) handleNormalBlock(eb *score.ExtendedBlock) {
