@@ -801,6 +801,7 @@ func (e *ConsensusEngine) vote() {
 		// Recreating vote so that it has updated epoch and signature.
 		if block.Status.IsUndecided() {
 			e.logger.Debugf("Repeating block %v is undecided, we cannot vote", block.Block.Hash().Hex())
+			return
 		}
 		vote = e.createVote(block.Block)
 	} else {
