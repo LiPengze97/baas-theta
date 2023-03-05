@@ -763,6 +763,7 @@ func (e *ConsensusEngine) vote() {
 
 	if tip.Status.IsUndecided() {
 		e.logger.Debugf("Tip %v is undecided, we cannot vote", tip.Block.Hash().Hex())
+		return
 	}
 
 	if !e.shouldVote(tip.Hash()) {
