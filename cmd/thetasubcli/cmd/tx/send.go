@@ -303,9 +303,9 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 		sendTx.SetSignature(fromAddress, sig)
 		raw, err := stypes.TxToBytes(sendTx)
 		if err != nil {
-			utils.Error("Failed to encode transaction: %v\n", err)
+			fmt.Printf("Failed to encode transaction: %v\n", err)
 		}
-		fmt.Println("raw Tx size: ", len(raw))
+		// fmt.Println("raw Tx size: ", len(raw))
 		// hash := crypto.Keccak256Hash(raw)
 		signedTx := hex.EncodeToString(raw)
 		txToSend = append(txToSend, signedTx)
@@ -318,6 +318,7 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 			// if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
 			// 	time.Sleep(time.Duration(300) * time.Millisecond)
 			// }
+
 			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 			for tx_idx, signedTx := range txToSend {
 				var res *jsonrpc.RPCResponse
@@ -328,6 +329,17 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 				}
 				if res.Error != nil {
 					utils.Error("Server returned error: %v\n", res.Error)
+				}
+				if remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" {
+					time.Sleep(time.Duration(15) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://10.10.1.3:16900/rpc" {
+					time.Sleep(time.Duration(55) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" {
+					time.Sleep(time.Duration(155) * time.Millisecond)
+					// time.Sleep(time.Duration(100) * time.Millisecond)
+				} else {
+					time.Sleep(time.Duration(296) * time.Millisecond)
+					// time.Sleep(time.Duration(156) * time.Millisecond)
 				}
 				_ = &rpc.SendSoleRawTransactionResult{}
 				/*

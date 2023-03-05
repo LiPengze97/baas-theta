@@ -860,6 +860,16 @@ func (e *ConsensusEngine) validateVote(vote score.Vote) bool {
 	return true
 }
 
+// func (e *ConsensusEngine) isHashUndecided(hash common.Hash) bool {
+// 	voteBlock, err := e.chain.FindBlock(hash)
+// 	if err != nil || voteBlock.Status.IsUndecided(){
+// 		// block has not arrived, but vote arrived?
+// 		return true
+// 	}
+
+// 	return false
+// }
+
 func (e *ConsensusEngine) handleVote(vote score.Vote) (endEpoch bool) {
 	// Validate vote.
 	if !e.validateVote(vote) {
@@ -889,6 +899,19 @@ func (e *ConsensusEngine) handleVote(vote score.Vote) (endEpoch bool) {
 
 		if nextValidators.HasMajority(currentEpochVotes) {
 			nextEpoch := vote.Epoch + 1
+			voteBlock, err := e.chain.FindBlock(vote.Block)
+			if err != nil {
+				// block has not arrived, but vote arrived?
+				e.logger.Debugf("block %v not found when majority", vote.Block)
+				return false
+			}
+			if voteBlock.Status.IsUndecided() {
+				endEpoch = false
+				e.logger.WithFields(log.Fields{
+					"block":  voteBlock.Block.Hash().Hex(),
+				}).Debug("You are too fast. Undecided now")
+				return
+			}
 			endEpoch = true
 			if nextEpoch > e.GetEpoch()+1 {
 				// Broadcast epoch votes when jumping epoch.
@@ -898,6 +921,10 @@ func (e *ConsensusEngine) handleVote(vote score.Vote) (endEpoch bool) {
 			}
 
 			tip := e.GetTipToExtend()
+			if tip.Status.IsUndecided() {
+				e.logger.Debugf("block tip %v is undecided when majority", tip.Hash().Hex())
+				return false
+			}
 			expectedProposer := e.validatorManager.GetNextProposer(tip.Hash(), nextEpoch)
 
 			e.logger.WithFields(log.Fields{
