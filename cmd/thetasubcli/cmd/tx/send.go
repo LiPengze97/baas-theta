@@ -330,11 +330,11 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 				if res.Error != nil {
 					utils.Error("Server returned error: %v\n", res.Error)
 				}
-				if remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" {
+				if remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16920/rpc" {
 					time.Sleep(time.Duration(15) * time.Millisecond)
-				} else if remoteRPCEndpoint == "http://10.10.1.3:16900/rpc" {
+				} else if remoteRPCEndpoint == "http://10.10.1.3:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16910/rpc" {
 					time.Sleep(time.Duration(55) * time.Millisecond)
-				} else if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" {
+				} else if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" {
 					time.Sleep(time.Duration(155) * time.Millisecond)
 					// time.Sleep(time.Duration(100) * time.Millisecond)
 				} else {
