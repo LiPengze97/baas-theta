@@ -56,6 +56,7 @@ type ConsensusEngine struct {
 	mu         *sync.Mutex
 	voteTimer  *time.Timer
 	epochTimer *time.Timer
+	undecidedTimer *time.Timer
 
 	// blockProcessedTime    map[*score.Block]time.Time
 	undecidedBlocksQueue *list.List
@@ -273,10 +274,11 @@ func (e *ConsensusEngine) mainLoop() {
 					e.vote()
 				}
 			case <-e.epochTimer.C:
-				e.processUndecidedBlock()
 				e.logger.WithFields(log.Fields{"e.epoch": e.GetEpoch()}).Debug("Epoch timeout. Repeating epoch")
 				e.vote()
 				break Epoch
+			case <-e.undecidedTimer.C:
+				e.processUndecidedBlock()
 			}
 		}
 	}
@@ -296,6 +298,11 @@ func (e *ConsensusEngine) enterEpoch() {
 		e.voteTimer.Stop()
 	}
 	e.voteTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) * time.Millisecond)
+
+	if e.undecidedTimer != nil {
+		e.undecidedTimer.Stop()
+	}
+	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval) / 2) * time.Millisecond)
 
 	e.voteTimerReady = false
 	e.blockProcessed = false
@@ -744,7 +751,15 @@ func (e *ConsensusEngine) processUndecidedBlock() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.undecidedBlocksQueue.Len() != 0 {
-		e.AddMessage(e.undecidedBlocksQueue.Front().Value)
+		eb, err := e.chain.FindBlock(e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash())
+		if err != nil {
+			// Should not happen.
+			e.logger.WithFields(log.Fields{
+				"error": err,
+				"block": e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash().Hex(),
+			}).Fatal("Failed to find block while processing undecided block")
+		}
+		e.handleNormalBlock(eb)
 	}
 }
 
@@ -965,12 +980,9 @@ func (e *ConsensusEngine) checkCC(hash common.Hash) {
 	if block.Status.IsUndecided() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		e.logger.Debugf("checking cc, I am undecided : %v", hash.Hex())
+		e.logger.Debugf("checking cc, but I am undecided : %v, return", hash.Hex())
 		e.showQueueContent()
-		if e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash().Hex() != hash.Hex() {
-			e.logger.WithFields(log.Fields{"block": hash.Hex()}).Debug("your ancestor undecided block has not been processed!")
-			return
-		}
+		return	
 	}
 	// Skip invalid block.
 	if block.Status.IsInvalid() {
@@ -1124,6 +1136,9 @@ func (e *ConsensusEngine) finalizeBlock(block *score.ExtendedBlock) error {
 }
 
 func (e *ConsensusEngine) shouldPropose(tip *score.ExtendedBlock, epoch uint64) bool {
+	if e.undecidedBlocksQueue.Len() != 0 {
+		return false
+	}
 	if epoch <= tip.Epoch {
 		e.logger.WithFields(log.Fields{
 			"tip":       tip.Hash().Hex(),
