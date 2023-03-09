@@ -183,6 +183,38 @@ func (t *ThetaRPCService) SendSoleRawTransaction(
 	*/
 }
 
+// ------------------------------- SendSoleMultiRawTransaction -----------------------------------
+
+type SendSoleMultiRawTransactionArgs struct {
+	TxBytes []string `json:"tx_bytes"`
+}
+
+type SendSoleMultiRawTransactionResult struct {
+	// TxHash string             `json:"hash"`
+	Block *score.BlockHeader `json:"block",rlp:"nil"`
+}
+
+func (t *ThetaRPCService) SendSoleMultiRawTransaction(
+	args *SendSoleMultiRawTransactionArgs, result *SendSoleMultiRawTransactionResult) (err error) {
+	logger.Info("receive multiple raw transactions")
+	for _, tx := range args.TxBytes {
+		txBytes, err := decodeTxHexBytes(tx)
+		if err != nil {
+			return err
+		}
+		hash := crypto.Keccak256Hash(txBytes)
+		logger.Infof("raw transaction : %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+		// logger.Infof("Sole Prepare to broadcast raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
+		err = t.mempool.InsertTransaction(txBytes)
+		if err != nil {
+			logger.Warnf("Failed to broadcast raw transaction (sync): %v, hash: %v, err: %v", hex.EncodeToString(txBytes), hash.Hex(), err)
+			return err
+		}
+	}
+	logger.Info("complete insert multiple raw transactions")
+	return nil
+}
+
 // ------------------------------- BroadcastRawTransaction -----------------------------------
 
 type BroadcastRawTransactionArgs struct {

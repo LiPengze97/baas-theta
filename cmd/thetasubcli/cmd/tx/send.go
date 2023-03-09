@@ -46,6 +46,13 @@ var autoQueueSendCmd = &cobra.Command{
 	Run:     doAutoQueueSendCmd,
 }
 
+var autoMultiQueueSendCmd = &cobra.Command{
+	Use:     "automq",
+	Short:   "Send tokens",
+	Example: `thetasubcli tx send --chain="privatenet" --from=2E833968E5bB786Ae419c4d13189fB081Cc43bab --to=9F1233798E905E173560071255140b4A8aBd3Ec6 --tfuel=9 --seq=1`,
+	Run:     doAutoQueueMultiSendCmd,
+}
+
 func doSendCmd(cmd *cobra.Command, args []string) {
 	walletType := getWalletType(cmd)
 	if walletType == wtypes.WalletTypeSoft && len(fromFlag) == 0 {
@@ -243,17 +250,12 @@ func doAutoSendCmd(cmd *cobra.Command, args []string) {
 		}
 		wg.Wait()
 	}
-
-	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
-
-	// remoteRPCEndpoints := []string{"http://127.0.0.1:16900/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc"}
-
 }
 
 func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 
-	// remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
-	remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
 
 	var wg sync.WaitGroup
 
@@ -371,11 +373,115 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 		go f(remoteRPCEndpoint, idx)
 	}
 	wg.Wait()
+}
 
-	// remoteRPCEndpoints := []string{"http://10.10.1.1:16900/rpc", "http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc"}
+func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 
-	// remoteRPCEndpoints := []string{"http://127.0.0.1:16900/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc"}
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
 
+	var wg sync.WaitGroup
+
+	wallet, fromAddress, err := walletUnlockWithPath(cmd, "0x2E833968E5bB786Ae419c4d13189fB081Cc43bab", pathFlag, "qwertyuiop")
+	if err != nil || wallet == nil {
+		return
+	}
+	defer wallet.Lock(fromAddress)
+	tfuel, ok := types.ParseCoinAmount("1")
+	if !ok {
+		utils.Error("Failed to parse tfuel amount")
+	}
+	fee, ok := types.ParseCoinAmount(feeFlag)
+	if !ok {
+		utils.Error("Failed to parse fee")
+	}
+	outputs := []types.TxOutput{{
+		Address: common.HexToAddress("0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A"),
+		Coins: types.Coins{
+			TFuelWei: tfuel,
+			ThetaWei: new(big.Int).SetUint64(0),
+		},
+	}}
+
+	realTxToSend := [][]string{}
+	// s1 := time.Now()
+	nonce := 0
+	for j := 0; j < sendRoundFlag; j++ {
+		txToSend := []string{}
+		for i := 0; i < sendNumPerRound; i++ {
+			inputs := []types.TxInput{{
+				Address: fromAddress,
+				Coins: types.Coins{
+					TFuelWei: new(big.Int).Add(tfuel, fee),
+					ThetaWei: new(big.Int).SetUint64(0),
+				},
+				Sequence: uint64(nonce),
+			}}
+			nonce++
+			sendTx := &types.SendTx{
+				Fee: types.Coins{
+					ThetaWei: new(big.Int).SetUint64(0),
+					TFuelWei: fee,
+				},
+				Inputs:  inputs,
+				Outputs: outputs,
+			}
+			sig, err := wallet.Sign(fromAddress, sendTx.SignBytes("tsub360777"))
+			if err != nil {
+				utils.Error("Failed to sign transaction: %v\n", err)
+			}
+			sendTx.SetSignature(fromAddress, sig)
+			raw, err := stypes.TxToBytes(sendTx)
+			if err != nil {
+				fmt.Printf("Failed to encode transaction: %v\n", err)
+			}
+			// fmt.Println("raw Tx size: ", len(raw))
+			// hash := crypto.Keccak256Hash(raw)
+			signedTx := hex.EncodeToString(raw)
+
+			// fmt.Println("tx raw", signedTx, ", tx hash", hash.Hex())
+			txToSend = append(txToSend, signedTx)
+		}
+		realTxToSend = append(realTxToSend, txToSend)
+		// fmt.Println(j, ":", txToSend)
+		// fmt.Println("total time", time.Since(s1))
+	}
+
+	for idx, remoteRPCEndpoint := range remoteRPCEndpoints {
+		f := func(remoteRPCEndpoint string, index int) {
+			defer wg.Done()
+			client := rpcc.NewRPCClient(remoteRPCEndpoint)
+			for tx_idx, signedTx := range realTxToSend {
+				if index == 1 {
+					fmt.Println("send msg", tx_idx, "to node", remoteRPCEndpoint)
+				}
+				var res *jsonrpc.RPCResponse
+				res, err = client.Call("theta.SendSoleMultiRawTransaction", rpc.SendSoleMultiRawTransactionArgs{TxBytes: signedTx})
+				if err != nil {
+					utils.Error("Failed to send sole transaction: %v\n", err)
+				}
+				if res.Error != nil {
+					utils.Error("Server returned error: %v\n", res.Error)
+				}
+				if remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16920/rpc" {
+					time.Sleep(time.Duration(15) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://10.10.1.3:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16910/rpc" {
+					time.Sleep(time.Duration(55) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" {
+					time.Sleep(time.Duration(155) * time.Millisecond)
+					// time.Sleep(time.Duration(100) * time.Millisecond)
+				} else {
+					time.Sleep(time.Duration(296) * time.Millisecond)
+					// time.Sleep(time.Duration(156) * time.Millisecond)
+				}
+				fmt.Printf("Successfully send sole batch transactions #%v to node %v\n", tx_idx, index+1)
+				time.Sleep(time.Duration(sendIntervalMsFlag) * time.Millisecond)
+			}
+		}
+		wg.Add(1)
+		go f(remoteRPCEndpoint, idx)
+	}
+	wg.Wait()
 }
 
 /* broadcast version
@@ -514,4 +620,19 @@ func init() {
 	autoQueueSendCmd.Flags().StringVar(&passwordFlag, "password", "", "password to unlock the wallet")
 	autoQueueSendCmd.Flags().Uint64Var(&sendTotalNumFlag, "num", 1000, "total number of message")
 	autoQueueSendCmd.Flags().Uint64Var(&sendIntervalMsFlag, "interval", 1000, "sending rate")
+
+	autoMultiQueueSendCmd.Flags().StringVar(&chainIDFlag, "chain", "", "Chain ID")
+	autoMultiQueueSendCmd.Flags().StringVar(&fromFlag, "from", "", "Address to send from")
+	autoMultiQueueSendCmd.Flags().StringVar(&toFlag, "to", "", "Address to send to")
+	autoMultiQueueSendCmd.Flags().StringVar(&pathFlag, "path", "", "Wallet derivation path")
+	autoMultiQueueSendCmd.Flags().Uint64Var(&seqFlag, "seq", 0, "Sequence number of the transaction")
+	autoMultiQueueSendCmd.Flags().StringVar(&tfuelAmountFlag, "tfuel", "0", "TFuel amount")
+	autoMultiQueueSendCmd.Flags().StringVar(&feeFlag, "fee", fmt.Sprintf("%dwei", types.MinimumTransactionFeeTFuelWeiJune2021), "Fee")
+	autoMultiQueueSendCmd.Flags().StringVar(&walletFlag, "wallet", "soft", "Wallet type (soft|nano|trezor)")
+	autoMultiQueueSendCmd.Flags().BoolVar(&asyncFlag, "async", false, "block until tx has been included in the blockchain")
+	autoMultiQueueSendCmd.Flags().StringVar(&passwordFlag, "password", "", "password to unlock the wallet")
+	autoMultiQueueSendCmd.Flags().Uint64Var(&sendTotalNumFlag, "num", 1000, "total number of message")
+	autoMultiQueueSendCmd.Flags().Uint64Var(&sendIntervalMsFlag, "interval", 1000, "sending rate")
+	autoMultiQueueSendCmd.Flags().IntVar(&sendNumPerRound, "txnum", 1, "txs in one round")
+	autoMultiQueueSendCmd.Flags().IntVar(&sendRoundFlag, "round", 1, "number of rounds")
 }

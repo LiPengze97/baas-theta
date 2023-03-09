@@ -53,9 +53,9 @@ type ConsensusEngine struct {
 	cancel  context.CancelFunc
 	stopped bool
 
-	mu         *sync.Mutex
-	voteTimer  *time.Timer
-	epochTimer *time.Timer
+	mu             *sync.Mutex
+	voteTimer      *time.Timer
+	epochTimer     *time.Timer
 	undecidedTimer *time.Timer
 
 	// blockProcessedTime    map[*score.Block]time.Time
@@ -302,7 +302,7 @@ func (e *ConsensusEngine) enterEpoch() {
 	if e.undecidedTimer != nil {
 		e.undecidedTimer.Stop()
 	}
-	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval) / 2) * time.Millisecond)
+	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)/2) * time.Millisecond)
 
 	e.voteTimerReady = false
 	e.blockProcessed = false
@@ -759,7 +759,8 @@ func (e *ConsensusEngine) processUndecidedBlock() {
 				"block": e.undecidedBlocksQueue.Front().Value.(*score.Block).Hash().Hex(),
 			}).Fatal("Failed to find block while processing undecided block")
 		}
-		e.handleNormalBlock(eb)
+		// e.handleNormalBlock(eb)
+		e.AddMessage(eb.Block)
 	}
 }
 
@@ -923,7 +924,7 @@ func (e *ConsensusEngine) handleVote(vote score.Vote) (endEpoch bool) {
 			if voteBlock.Status.IsUndecided() {
 				endEpoch = false
 				e.logger.WithFields(log.Fields{
-					"block":  voteBlock.Block.Hash().Hex(),
+					"block": voteBlock.Block.Hash().Hex(),
 				}).Debug("You are too fast. Undecided now")
 				return
 			}
@@ -976,13 +977,13 @@ func (e *ConsensusEngine) checkCC(hash common.Hash) {
 		e.logger.WithFields(log.Fields{"block": hash.Hex()}).Debug("checkCC: Block hash in vote is not found")
 		return
 	}
-	// Skip the undecided block that is not the first
+	// Skip the undecided block
 	if block.Status.IsUndecided() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 		e.logger.Debugf("checking cc, but I am undecided : %v, return", hash.Hex())
 		e.showQueueContent()
-		return	
+		return
 	}
 	// Skip invalid block.
 	if block.Status.IsInvalid() {
@@ -1003,7 +1004,7 @@ func (e *ConsensusEngine) checkCC(hash common.Hash) {
 	}
 	// Ignore outdated votes unless it is a undecied block.
 	highestCCBlockHeight := e.state.GetHighestCCBlock().Height
-	if block.Height < highestCCBlockHeight && !block.Status.IsUndecided() {
+	if block.Height < highestCCBlockHeight {
 		return
 	}
 
@@ -1128,7 +1129,7 @@ func (e *ConsensusEngine) finalizeBlock(block *score.ExtendedBlock) error {
 
 	select {
 	case e.finalizedBlocks <- block.Block:
-		e.logger.Infof("Notified finalized block, height=%v", block.Height)
+		e.logger.Infof("Notified finalized block, height=%v, at time=%v", block.Height, big.NewInt(time.Now().Unix()))
 	default:
 		e.logger.Warnf("Failed to notify finalized block, height=%v", block.Height)
 	}

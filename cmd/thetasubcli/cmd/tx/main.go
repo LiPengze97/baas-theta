@@ -39,6 +39,9 @@ var (
 
 	sendTotalNumFlag   uint64
 	sendIntervalMsFlag uint64
+
+	sendRoundFlag   int
+	sendNumPerRound int
 )
 
 // TxCmd represents the Tx command
@@ -53,4 +56,5 @@ func init() {
 	TxCmd.AddCommand(autoSendCmd)
 	TxCmd.AddCommand(autoQueueSendCmd)
 	TxCmd.AddCommand(smartContractCmd)
+	TxCmd.AddCommand(autoMultiQueueSendCmd)
 }
