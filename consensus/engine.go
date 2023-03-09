@@ -302,7 +302,7 @@ func (e *ConsensusEngine) enterEpoch() {
 	if e.undecidedTimer != nil {
 		e.undecidedTimer.Stop()
 	}
-	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)/2) * time.Millisecond)
+	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) * time.Millisecond)
 
 	e.voteTimerReady = false
 	e.blockProcessed = false
@@ -1129,7 +1129,7 @@ func (e *ConsensusEngine) finalizeBlock(block *score.ExtendedBlock) error {
 
 	select {
 	case e.finalizedBlocks <- block.Block:
-		e.logger.Infof("Notified finalized block, height=%v, at time=%v", block.Height, big.NewInt(time.Now().Unix()))
+		e.logger.Infof("Notified finalized block, height=%v, at time=%v", block.Height, big.NewInt(time.Now().UnixNano()/int64(time.Millisecond)))
 	default:
 		e.logger.Warnf("Failed to notify finalized block, height=%v", block.Height)
 	}

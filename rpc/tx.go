@@ -197,12 +197,13 @@ type SendSoleMultiRawTransactionResult struct {
 func (t *ThetaRPCService) SendSoleMultiRawTransaction(
 	args *SendSoleMultiRawTransactionArgs, result *SendSoleMultiRawTransactionResult) (err error) {
 	logger.Info("receive multiple raw transactions")
+	var hash common.Hash
 	for _, tx := range args.TxBytes {
 		txBytes, err := decodeTxHexBytes(tx)
 		if err != nil {
 			return err
 		}
-		hash := crypto.Keccak256Hash(txBytes)
+		hash = crypto.Keccak256Hash(txBytes)
 		logger.Infof("raw transaction : %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
 		// logger.Infof("Sole Prepare to broadcast raw transaction (sync): %v, hash: %v", hex.EncodeToString(txBytes), hash.Hex())
 		err = t.mempool.InsertTransaction(txBytes)
@@ -212,7 +213,29 @@ func (t *ThetaRPCService) SendSoleMultiRawTransaction(
 		}
 	}
 	logger.Info("complete insert multiple raw transactions")
-	return nil
+
+	finalized := make(chan *score.Block)
+	timeout := time.NewTimer(txTimeout)
+	defer timeout.Stop()
+
+	txCallbackManager.AddCallback(hash, func(block *score.Block) {
+		select {
+		case finalized <- block:
+		default:
+		}
+	})
+
+	select {
+	case block := <-finalized:
+		if block == nil {
+			logger.Infof("Tx callback returns nil")
+			return errors.New("Internal server error")
+		}
+		result.Block = block.BlockHeader
+		return nil
+	case <-timeout.C:
+		return errors.New("Timed out waiting for transaction to be included")
+	}
 }
 
 // ------------------------------- BroadcastRawTransaction -----------------------------------
