@@ -302,7 +302,7 @@ func (e *ConsensusEngine) enterEpoch() {
 	if e.undecidedTimer != nil {
 		e.undecidedTimer.Stop()
 	}
-	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) * time.Millisecond)
+	e.undecidedTimer = time.NewTimer(time.Duration(viper.GetInt(common.CfgConsensusMinBlockInterval)) / 3 * time.Millisecond)
 
 	e.voteTimerReady = false
 	e.blockProcessed = false

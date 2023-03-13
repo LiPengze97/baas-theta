@@ -377,8 +377,8 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 
 func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 
-	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
-	// remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
 
 	var wg sync.WaitGroup
 
@@ -480,12 +480,13 @@ func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 				if err != nil {
 					utils.Error("Failed to parse server response: %v\n", err)
 				}
-				if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
-					formatted, err := json.MarshalIndent(result, "", "    ")
-					if err != nil {
-						utils.Error("Failed to parse server response: %v\n", err)
-					}
-					fmt.Printf("tx_idx:#%v finalized using %v :\n%s\n", tx_idx, time.Since(s1), formatted)
+				if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" {
+					// formatted, err := json.MarshalIndent(result, "", "    ")
+					// if err != nil {
+					// 	utils.Error("Failed to parse server response: %v\n", err)
+					// }
+					// fmt.Printf("tx_idx:#%v finalized using %v :\n%s\n", tx_idx, time.Since(s1), formatted)
+					fmt.Printf("tx_idx:#%v finalized using %v :\n", tx_idx, time.Since(s1))
 				}
 				fmt.Printf("Successfully send sole batch transactions #%v to node %v\n", tx_idx, index+1)
 				time.Sleep(time.Duration(sendIntervalMsFlag) * time.Millisecond)
