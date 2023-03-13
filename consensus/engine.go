@@ -1129,7 +1129,7 @@ func (e *ConsensusEngine) finalizeBlock(block *score.ExtendedBlock) error {
 
 	select {
 	case e.finalizedBlocks <- block.Block:
-		e.logger.Infof("Notified finalized block, height=%v, at time=%v", block.Height, big.NewInt(time.Now().UnixNano()/int64(time.Millisecond)))
+		e.logger.Infof("Notified finalized block, height=%v, at time=%v", block.Height, big.NewInt(time.Now().UnixMilli()))
 	default:
 		e.logger.Warnf("Failed to notify finalized block, height=%v", block.Height)
 	}
@@ -1324,8 +1324,12 @@ func (e *ConsensusEngine) propose() {
 		if err != nil {
 			e.logger.WithFields(log.Fields{"error": err}).Fatal("Failed to add proposed block to chain")
 		}
+		if len(proposal.Block.Txs) != 0 {
+			e.logger.WithFields(log.Fields{"proposal block hash": proposal.Block.Hash().Hex(), "height": proposal.Block.Height, "txnum": len(proposal.Block.Txs)}).Info("Making txes proposal")
+		} else {
+			e.logger.WithFields(log.Fields{"proposal block hash": proposal.Block.Hash().Hex(), "height": proposal.Block.Height}).Info("Making empty proposal")
+		}
 
-		e.logger.WithFields(log.Fields{"proposal": proposal}).Info("Making proposal")
 	}
 
 	payload, err := rlp.EncodeToBytes(proposal)

@@ -377,8 +377,8 @@ func doAutoQueueSendCmd(cmd *cobra.Command, args []string) {
 
 func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 
-	// remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
-	remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
+	remoteRPCEndpoints := []string{"http://127.0.0.1:16930/rpc", "http://127.0.0.1:16910/rpc", "http://127.0.0.1:16920/rpc", "http://127.0.0.1:16900/rpc"}
+	// remoteRPCEndpoints := []string{"http://10.10.1.2:16900/rpc", "http://10.10.1.3:16900/rpc", "http://10.10.1.4:16900/rpc", "http://10.10.1.5:16900/rpc"}
 
 	var wg sync.WaitGroup
 
@@ -453,8 +453,20 @@ func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 			client := rpcc.NewRPCClient(remoteRPCEndpoint)
 			for tx_idx, signedTx := range realTxToSend {
 				if index == 1 {
-					fmt.Println("send msg", tx_idx, "to node", remoteRPCEndpoint, "at time", time.Now().UnixNano()/int64(time.Millisecond))
+					fmt.Println("send msg", tx_idx, "to node", remoteRPCEndpoint, "at time", time.Now().UnixMilli())
 				}
+				if remoteRPCEndpoint == "http://127.0.0.1:16920/rpc" {
+					time.Sleep(time.Duration(15) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://127.0.0.1:16910/rpc" {
+					time.Sleep(time.Duration(55) * time.Millisecond)
+				} else if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+					time.Sleep(time.Duration(155) * time.Millisecond)
+					// time.Sleep(time.Duration(100) * time.Millisecond)
+				} else {
+					time.Sleep(time.Duration(296) * time.Millisecond)
+					// time.Sleep(time.Duration(156) * time.Millisecond)
+				}
+				s1 := time.Now()
 				var res *jsonrpc.RPCResponse
 				res, err = client.Call("theta.SendSoleMultiRawTransaction", rpc.SendSoleMultiRawTransactionArgs{TxBytes: signedTx})
 				if err != nil {
@@ -468,24 +480,13 @@ func doAutoQueueMultiSendCmd(cmd *cobra.Command, args []string) {
 				if err != nil {
 					utils.Error("Failed to parse server response: %v\n", err)
 				}
-				formatted, err := json.MarshalIndent(result, "", "    ")
-				if err != nil {
-					utils.Error("Failed to parse server response: %v\n", err)
-				}
-				fmt.Printf("Successfully send sole transaction to node %v:\n%s\n", idx+1, formatted)
-				/*
-					if remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16920/rpc" {
-						time.Sleep(time.Duration(15) * time.Millisecond)
-					} else if remoteRPCEndpoint == "http://10.10.1.3:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16910/rpc" {
-						time.Sleep(time.Duration(55) * time.Millisecond)
-					} else if remoteRPCEndpoint == "http://10.10.1.4:16900/rpc" || remoteRPCEndpoint == "http://10.10.1.2:16900/rpc" {
-						time.Sleep(time.Duration(155) * time.Millisecond)
-						// time.Sleep(time.Duration(100) * time.Millisecond)
-					} else {
-						time.Sleep(time.Duration(296) * time.Millisecond)
-						// time.Sleep(time.Duration(156) * time.Millisecond)
+				if remoteRPCEndpoint == "http://127.0.0.1:16900/rpc" {
+					formatted, err := json.MarshalIndent(result, "", "    ")
+					if err != nil {
+						utils.Error("Failed to parse server response: %v\n", err)
 					}
-				*/
+					fmt.Printf("tx_idx:#%v finalized using %v :\n%s\n", tx_idx, time.Since(s1), formatted)
+				}
 				fmt.Printf("Successfully send sole batch transactions #%v to node %v\n", tx_idx, index+1)
 				time.Sleep(time.Duration(sendIntervalMsFlag) * time.Millisecond)
 			}
